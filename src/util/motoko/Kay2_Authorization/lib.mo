@@ -1,0 +1,174 @@
+import Account "../ICRC-1/Account";
+import ICRC_1_Types "../ICRC-1/Types";
+import Principal "mo:base/Principal";
+import Text "mo:base/Text";
+import Blob "mo:base/Blob";
+import Order "mo:base/Order";
+import Nat "mo:base/Nat";
+import RBTree "../StableCollections/RedBlackTree/RBTree";
+import Value "../Value";
+import Hasher "../SHA2";
+
+module {
+	public let DEFAULT_TAKE = "kay2:default_take_value";
+	public let MAX_TAKE = "kay2:max_take_value";
+
+	public let TOKEN_MINIMUMS = "kay2:icrc1_balance_minimums"; // = map of (canister_id, minimum_balance must have)
+	public let NFT_CANISTERS = "kay2:icrc7_canister_ids";
+
+	type AnonProof = {
+		canister_id : Principal;
+		amount : Nat;
+		root : Blob;
+		nullifier : Blob;
+		to : Account.Pair;
+	};
+	public type Identity = {
+		#ICRC_1 : Account.Pair;
+	};
+	public type Authorization = {
+		#ICRC_1 : { subaccount : ?Blob; canister_id : Principal }; // check if user holds enough token to create/modify/delete files for free
+		#ICRC_7 : {
+			subaccount : ?Blob;
+			canister_id : Principal;
+			preferred_token_id : ?Nat;
+		}; // check if user holds any NFT in the collection to create/modify/delete files for free
+		#ICRC_2 : { subaccount : ?Blob; canister_id : Principal; fee : ?Nat }; // else, user have to pay fee to create/modify/delete files
+		// #None : { subaccount : ?Blob };
+	};
+	public type Authorized = {
+		#ICRC_1 : {
+			owner : Principal;
+			subaccount : ?Blob;
+			canister_id : Principal;
+			minimum_balance : Nat;
+		};
+		#ICRC_7 : {
+			owner : Principal;
+			subaccount : ?Blob;
+			canister_id : Principal;
+			token_id : Nat;
+		};
+		#ICRC_2 : {
+			owner : Principal;
+			subaccount : ?Blob;
+			canister_id : Principal;
+			xfer : Nat;
+		}; // xfer = paid fee transfer block id
+		// #None : { account : Account.Pair };
+	};
+	public type Unauthorized = {
+		#ICRC_1 : {
+			#BadCanister : { expected_canister_ids : [Principal] };
+			#BalanceTooSmall : { current_balance : Nat; minimum_balance : Nat }; // user dont have enough balance to meet the minimum
+		};
+		#ICRC_7 : {
+			#BadCanister : { expected_canister_ids : [Principal] };
+			#UnknownPreferredToken : { current_holdings : [Nat] }; // preferred token is not in the list of user's holding
+			#EmptyHoldings; // user holds nothing from the collection
+		};
+		#ICRC_2 : {
+			#BadCanister : { expected_canister_ids : [Principal] };
+			#BadFee : { expected_fee : Nat };
+			#TransferFromFailed : ICRC_1_Types.TransferFromError;
+		};
+
+	};
+	public type Locker = { caller : Principal; authorization : Authorization };
+	public func lockerIdentity({ caller; authorization } : Locker) : Identity = switch authorization {
+		case (#ICRC_1 { subaccount } or #ICRC_2 { subaccount } or #ICRC_7 { subaccount }) #ICRC_1 {
+			owner = caller;
+			subaccount;
+		};
+	};
+	// func rankIdentity(o : Identity) : Nat = switch o {
+	//   case (#ICRC_1 _) 0;
+	// };
+	public func compareIdentity(ao : Identity, bo : Identity) : Order.Order = switch (ao, bo) {
+		case (#ICRC_1 a, #ICRC_1 b) Account.compare(a, b);
+		// case _ Nat.compare(rankIdentity(ao), rankIdentity(bo));
+	};
+	public func equalIdentity(ao : Identity, bo : Identity) : Bool = compareIdentity(ao, bo) == #equal;
+
+	public func hashIdentity(owner : Identity) : Blob {
+		var hashes = RBTree.empty<Blob, Blob>();
+		func register(k : Text, v : Value.Type) {
+			let keyHash = Hasher.sha256([Text.encodeUtf8(k).vals()].vals());
+			let valueHash = Value.hash(v);
+			hashes := RBTree.insert(hashes, Blob.compare, keyHash, valueHash);
+		};
+		switch owner {
+			case (#ICRC_1 o) {
+				register("identity_type", #Text "ICRC_1");
+				register("owner", #Principal(o.owner));
+				switch (o.subaccount) {
+					case (?found) register("subaccount", #Blob found);
+					case _ ();
+				};
+			};
+		};
+		Hasher.sha256blobMap(RBTree.entries(hashes));
+	};
+	public func hashAuth(auth : Authorized) : Blob {
+		var hashes = RBTree.empty<Blob, Blob>();
+		func register(k : Text, v : Value.Type) {
+			let keyHash = Hasher.sha256([Text.encodeUtf8(k).vals()].vals());
+			let valueHash = Value.hash(v);
+			hashes := RBTree.insert(hashes, Blob.compare, keyHash, valueHash);
+		};
+		switch auth {
+			case (#ICRC_1 o) {
+				register("identity_type", #Text "ICRC_1");
+				register("owner", #Principal(o.owner));
+				switch (o.subaccount) {
+					case (?found) register("subaccount", #Blob found);
+					case _ ();
+				};
+				register("canister_id", #Principal(o.canister_id));
+				register("minimum_balance", #Nat(o.minimum_balance));
+			};
+			case (#ICRC_7 o) {
+				register("identity_type", #Text "ICRC_7");
+				register("owner", #Principal(o.owner));
+				switch (o.subaccount) {
+					case (?found) register("subaccount", #Blob found);
+					case _ ();
+				};
+				register("canister_id", #Principal(o.canister_id));
+				register("token_id", #Nat(o.token_id));
+			};
+			case (#ICRC_2 o) {
+				register("identity_type", #Text "ICRC_2");
+				register("owner", #Principal(o.owner));
+				switch (o.subaccount) {
+					case (?found) register("subaccount", #Blob found);
+					case _ ();
+				};
+				register("canister_id", #Principal(o.canister_id));
+				register("xfer", #Nat(o.xfer));
+			};
+			// case (#None o) {
+			//   register("identity_type", #Text "None");
+			//   register("owner", #Principal(o.owner));
+			// switch (o.subaccount) {
+			//   case (?found) register("subaccount", #Blob found);
+			//   case _ ();
+			// };
+			// };
+		};
+		Hasher.sha256blobMap(RBTree.entries(hashes));
+	};
+	public func identityValue(id : Identity) : Value.Type = switch id {
+		case (#ICRC_1 { owner; subaccount }) {
+			let x = switch subaccount {
+				case (?found) [("owner", #Principal owner), ("subaccount", #Blob found)];
+				case _ [("owner", #Principal owner)];
+			};
+			#Map x;
+		};
+	};
+
+	public func getMetrics(metrics : Value.Metadata, owners_size : Nat) : Value.Metadata {
+		Value.insert(metrics, "kay2:owners_size", #Nat owners_size);
+	};
+};

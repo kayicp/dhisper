@@ -1,0 +1,58 @@
+{
+  "canisters": {
+    "internet_identity": {
+      "candid": "https://github.com/dfinity/internet-identity/releases/latest/download/internet_identity.did",
+      "frontend": {},
+      "remote": {
+        "id": {
+          "ic": "rdmx6-jaaaa-aaaaa-aaadq-cai"
+        }
+      },
+      "type": "custom",
+      "wasm": "https://github.com/dfinity/internet-identity/releases/latest/download/internet_identity_dev.wasm.gz"
+    },
+    "dhisper_backend": {
+      "main": "src/dhisper_backend/main.mo",
+      "type": "motoko",
+      "optimize": "cycles",
+      "args": "-v --incremental-gc --enhanced-orthogonal-persistence"
+    },
+    "dhisper_frontend": {
+      "dependencies": [
+        "dhisper_backend"
+      ],
+      "source": [
+        "src/dhisper_frontend/dist"
+      ],
+      "type": "assets",
+      "workspace": "dhisper_frontend"
+    },
+    "icp_token": {
+      "type": "custom",
+      "candid": "https://raw.githubusercontent.com/dfinity/ic/f6f5e0927d14886e4bd67f776ee889f31cec2364/rs/ledger_suite/icrc1/ledger/ledger.did",
+      "wasm": "https://download.dfinity.systems/ic/f6f5e0927d14886e4bd67f776ee889f31cec2364/canisters/ic-icrc1-ledger.wasm.gz",
+      "remote": {
+        "id": {
+          "ic": "ryjl3-tyaaa-aaaaa-aaaba-cai"
+        }
+      }
+    }
+  },
+  "defaults": {
+    "build": {
+      "args": "",
+      "packtool": "mops sources"
+    }
+  },
+  "networks": {
+    "local": {
+      "bind": "127.0.0.1:5000",
+      "replica": {
+        "subnet_type": "system"
+      },
+      "type": "ephemeral"
+    }
+  },
+  "output_env_file": ".env",
+  "version": 1
+}
