@@ -39,3 +39,244 @@ button[type="submit"] {
 .browser-warning {
   display: none;
 }
+
+// Variables
+$primary-radius: 1rem;
+$shadow: 0 2px 8px rgba(0,0,0,0.15);
+$transition: 0.3s ease;
+$text-light: #fff;
+$text-dark: #333;
+$bg-light: #fafafa;
+$bg-alt: #f0f0f0;
+
+.feed-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 1rem;
+}
+
+// Tabs
+.tabs {
+  display: flex;
+  position: relative;
+  margin-bottom: 1rem;
+  .tab {
+    padding: 0.5rem 1rem;
+    cursor: pointer;
+    font-weight: bold;
+    &.active {
+      color: $text-dark;
+    }
+  }
+  .underline {
+    position: absolute;
+    bottom: 0;
+    height: 2px;
+    width: 50%;
+    background: $text-dark;
+    transition: transform $transition;
+  }
+}
+
+.scroll-container {
+  width: 100%;
+  max-width: 400px;
+  overflow-y: scroll;
+  -webkit-overflow-scrolling: touch;
+}
+
+.skeleton {
+  width: 100%;
+  height: 200px;
+  background: lighten($bg-light, 5%);
+  border-radius: $primary-radius;
+  animation: pulse 1.5s infinite;
+}
+
+@keyframes pulse {
+  0%,100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.create-btn,
+.back-btn {
+  margin: 1rem;
+  padding: 0.5rem 1rem;
+  border: none;
+  border-radius: $primary-radius;
+  box-shadow: $shadow;
+  background: $text-dark;
+  color: $text-light;
+  cursor: pointer;
+  transition: background $transition;
+  &:hover {
+    background: darken($text-dark, 10%);
+  }
+}
+
+// PostCard
+.post-card {
+  position: relative;
+  border-radius: $primary-radius;
+  box-shadow: $shadow;
+  padding: 1rem;
+  margin: 1rem auto;
+  max-width: 400px;
+  &:focus {
+    outline: 2px solid $text-dark;
+  }
+  .header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.5rem;
+    .author {
+      font-weight: bold;
+    }
+    .timestamp {
+      font-size: 0.8rem;
+    }
+    .delete-btn {
+      background: transparent;
+      border: none;
+      cursor: pointer;
+      opacity: 0;
+      transition: opacity $transition;
+      &:hover {
+        color: red;
+      }
+    }
+    &:hover .delete-btn {
+      opacity: 1;
+    }
+  }
+  .content {
+    margin-bottom: 0.5rem;
+    line-height: 1.4;
+  }
+  .comment-btn {
+    position: absolute;
+    right: 1rem;
+    bottom: 1rem;
+    background: rgba(0,0,0,0.3);
+    border: none;
+    border-radius: $primary-radius;
+    padding: 0.3rem 0.6rem;
+    color: $text-light;
+    cursor: pointer;
+  }
+}
+
+// Two-pane comment viewer
+.two-pane {
+  display: flex;
+  width: 100%;
+  max-width: 800px;
+  @media (max-width: 600px) {
+    flex-direction: column;
+  }
+  .left-pane,
+  .right-pane {
+    flex: 1;
+    padding: 1rem;
+    overflow-y: auto;
+  }
+  .right-pane {
+    background: $bg-light;
+    .sticky {
+      position: sticky;
+      top: 0;
+      background: $bg-light;
+      padding: 0.5rem 0;
+      font-weight: bold;
+      border-bottom: 1px solid darken($bg-light, 10%);
+    }
+    .comments-list {
+      margin: 1rem 0;
+      .comment-card {
+        border-radius: $primary-radius;
+        padding: 0.75rem;
+        margin-bottom: 0.5rem;
+        small {
+          display: block;
+          font-size: 0.75rem;
+          color: $text-dark;
+        }
+        .delete-btn {
+          float: right;
+          background: transparent;
+          border: none;
+          cursor: pointer;
+          &:hover { color: red; }
+        }
+      }
+    }
+    .add-comment {
+      border-top: 1px solid darken($bg-light, 10%);
+      padding-top: 1rem;
+      textarea {
+        width: 100%;
+        border-radius: $primary-radius;
+        border: 1px solid #ccc;
+        padding: 0.5rem;
+        resize: none;
+      }
+      .controls {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-top: 0.5rem;
+        select,
+        button {
+          margin-left: 0.5rem;
+          padding: 0.3rem 0.6rem;
+          border-radius: $primary-radius;
+          border: none;
+          box-shadow: $shadow;
+          cursor: pointer;
+        }
+        .counter {
+          font-size: 0.8rem;
+        }
+      }
+    }
+  }
+}
+
+// Modal
+.modal-overlay {
+  position: fixed;
+  top: 0; left: 0;
+  width: 100%; height: 100%;
+  background: rgba(0,0,0,0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+.modal {
+  background: $text-light;
+  border-radius: $primary-radius;
+  padding: 1rem;
+  box-shadow: $shadow;
+  max-width: 90%;
+  width: 400px;
+}
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 1rem;
+  button {
+    margin-left: 0.5rem;
+    padding: 0.5rem 1rem;
+    border-radius: $primary-radius;
+    border: none;
+    cursor: pointer;
+  }
+  .danger {
+    background: red;
+    color: $text-light;
+    &:hover { background: darken(red, 10%); }
+  }
+}
