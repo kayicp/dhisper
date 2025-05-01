@@ -1,6 +1,15 @@
 import { html, render } from 'lit-html';
 import { dhisper_backend } from 'declarations/dhisper_backend';
 
+BigInt.prototype.toJSON = function () {
+  return this.toString();
+};
+
+const blob2hex = blob => Array.from(blob).map(byte => byte.toString(16).padStart(2, '0')).join('');
+Uint8Array.prototype.toJSON = function () {
+  return blob2hex(this) // Array.from(this).toString();
+}
+
 // Utility: Generate random gradient
 function randomGradient() {
   const colors = [];
@@ -195,7 +204,7 @@ class CreatePostModal {
   constructor(onSubmit) {
     this.visible = false;
     this.body = '';
-    this.auth = 'ICRC_1';
+    this.auth = 'None';
     this.onSubmit = onSubmit;
   }
 
@@ -219,9 +228,20 @@ class CreatePostModal {
   async submit() {
     if (this.body.length < 10) return;
     try {
-      // await dhisper_backend.create_post({ body: this.body, auth: this.auth });
-      // this.close();
-      // this.onSubmit();
+      const create_res = await dhisper_backend.kay4_create({
+        thread : [],
+        content : this.body.trim(),
+        files: [],
+        owners: [],
+        metadata: [],
+        authorization: { None: { subaccount: [] } }
+      });
+      if ('Err' in create_res) {
+        alert(`Create Post Err: ${JSON.stringify(create_res.Err)}`);
+      } else {
+        this.close();
+        this.onSubmit();
+      };
     } catch (err) {
       console.error(err);
       alert('Failed to create post');
@@ -246,6 +266,7 @@ class CreatePostModal {
               ${count}/280
             </span>
             <select @change="${this.handleAuth.bind(this)}">
+              <option>None</option>
               <option>ICRC_1</option>
               <option>ICRC_2</option>
             </select>
@@ -273,20 +294,50 @@ class FeedApp {
     this.commentsViewer = null;
     this.sort = 'new';
     this.tabs = new FeedTabs(this.switchTab.bind(this));
-    this.modal = new CreatePostModal(this.refresh.bind(this));
+    this.modal = new CreatePostModal(this.loadPosts.bind(this));
     this.init();
   }
 
   async init() { 
-    // await this.loadPosts(); 
-    this.render(); 
+    await this.loadPosts();
   }
-  async loadPosts() {
-    // this.posts = await dhisper_backend.get_feed({ sort: this.sort });
+  async loadPosts(from = null) {
+    const prev = from? from > 0? [from - 1] : [] : [];
+    const post_ids = await dhisper_backend.kay4_posts([], prev, [2]);
+    const posts = [];
+    for (const id of post_ids) posts.push({ id });
+    if (posts.length > 0) {
+      await Promise.all([
+        new Promise((resolve, reject) => {
+          (async () => {try {
+            const timestamps = await dhisper_backend.kay4_timestamps_of(post_ids);
+            for (const i in timestamps) {
+              posts[i]['timestamp'] = timestamps[i].length > 0? new Date(Number(timestamps[i][0]) / 1000000).toLocaleString() : "";
+            };
+            resolve();
+          } catch (e) {
+            console.error('load timestamps', e);
+            alert('Failed to get timestamps of posts');
+            resolve();
+          }})();
+        }),
+        new Promise((resolve, reject) => {
+          (async () => {try {
+            const contents = await dhisper_backend.kay4_contents_of(post_ids);
+            for (const i in contents) {
+              posts[i]['content'] = contents[i].length > 0? contents[i][0] : "";
+            };
+            resolve();
+          } catch (e) {
+            console.error('load contents', e);
+            alert('Failed to get contents of posts');
+            resolve();
+          }})();
+        }),
+      ]);
+    };
+    this.posts = posts;
     this.render();
-  }
-  async refresh() { 
-    // await this.loadPosts(); 
   }
   switchTab(tab) { this.sort = tab.toLowerCase(); this.loadPosts(); }
   showComments(post) { this.commentsViewer = new CommentViewer(post, () => { this.commentsViewer = null; this.render(); }); this.render(); }

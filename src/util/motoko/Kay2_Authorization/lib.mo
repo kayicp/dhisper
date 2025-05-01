@@ -34,7 +34,7 @@ module {
 			preferred_token_id : ?Nat;
 		}; // check if user holds any NFT in the collection to create/modify/delete files for free
 		#ICRC_2 : { subaccount : ?Blob; canister_id : Principal; fee : ?Nat }; // else, user have to pay fee to create/modify/delete files
-		// #None : { subaccount : ?Blob };
+		#None : { subaccount : ?Blob };
 	};
 	public type Authorized = {
 		#ICRC_1 : {
@@ -55,7 +55,7 @@ module {
 			canister_id : Principal;
 			xfer : Nat;
 		}; // xfer = paid fee transfer block id
-		// #None : { account : Account.Pair };
+		#None : Account.Pair;
 	};
 	public type Unauthorized = {
 		#ICRC_1 : {
@@ -76,7 +76,7 @@ module {
 	};
 	public type Locker = { caller : Principal; authorization : Authorization };
 	public func lockerIdentity({ caller; authorization } : Locker) : Identity = switch authorization {
-		case (#ICRC_1 { subaccount } or #ICRC_2 { subaccount } or #ICRC_7 { subaccount }) #ICRC_1 {
+		case (#ICRC_1 { subaccount } or #ICRC_2 { subaccount } or #ICRC_7 { subaccount } or #None { subaccount }) #ICRC_1 {
 			owner = caller;
 			subaccount;
 		};
@@ -147,14 +147,14 @@ module {
 				register("canister_id", #Principal(o.canister_id));
 				register("xfer", #Nat(o.xfer));
 			};
-			// case (#None o) {
-			//   register("identity_type", #Text "None");
-			//   register("owner", #Principal(o.owner));
-			// switch (o.subaccount) {
-			//   case (?found) register("subaccount", #Blob found);
-			//   case _ ();
-			// };
-			// };
+			case (#None o) {
+				register("identity_type", #Text "None");
+				register("owner", #Principal(o.owner));
+				switch (o.subaccount) {
+					case (?found) register("subaccount", #Blob found);
+					case _ ();
+				};
+			};
 		};
 		Hasher.sha256blobMap(RBTree.entries(hashes));
 	};

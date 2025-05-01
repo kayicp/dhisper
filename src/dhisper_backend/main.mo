@@ -165,6 +165,7 @@ shared (install) actor class Canister(deploy : {}) = Self {
       // todo later: implement file storing
 
       let (authorization, owner) = switch (arg.authorization) {
+        case (#None auth) (#None { auth with owner = caller }, #ICRC_1 { auth with owner = caller });
         case (#ICRC_1 auth) {
           let user = { owner = caller; subaccount = auth.subaccount };
           if (Account.validate(user)) return Error.text("Invalid user account");
@@ -266,6 +267,7 @@ shared (install) actor class Canister(deploy : {}) = Self {
       };
       let post_owners = Kay4.getOwners(the_post);
       let authorization = switch (arg.authorization) {
+        case (#None auth) (#None { auth with owner = caller });
         case (#ICRC_1 auth) {
           let user = { owner = caller; subaccount = auth.subaccount };
           if (Account.validate(user)) return Error.text("Invalid user account");
