@@ -27,14 +27,14 @@ module {
 		#ICRC_1 : Account.Pair;
 	};
 	public type Authorization = {
-		#ICRC_1 : { subaccount : ?Blob; canister_id : Principal }; // check if user holds enough token to create/modify/delete files for free
+		#ICRC_1 : { subaccount : ?Blob; canister_id : Principal }; // check if user holds enough token to create/modify/delete files with weaker limits
 		#ICRC_7 : {
 			subaccount : ?Blob;
 			canister_id : Principal;
 			preferred_token_id : ?Nat;
-		}; // check if user holds any NFT in the collection to create/modify/delete files for free
-		#ICRC_2 : { subaccount : ?Blob; canister_id : Principal; fee : ?Nat }; // else, user have to pay fee to create/modify/delete files
-		#None : { subaccount : ?Blob };
+		}; // check if user holds any NFT in the collection to create/modify/delete files with weaker limits
+		#ICRC_2 : { subaccount : ?Blob; canister_id : Principal; fee : ?Nat }; // else, user have to pay fee to create/modify/delete files to bypass limits
+		#None : { subaccount : ?Blob }; // free tier
 	};
 	public type Authorized = {
 		#ICRC_1 : {
