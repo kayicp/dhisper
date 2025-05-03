@@ -16,14 +16,43 @@ function randomGradient() {
   return `linear-gradient(135deg, ${colors[0]}, ${colors[1]})`;
 }
 
+function timeAgo(date) {
+  const now = new Date();
+  const diffInSeconds = Math.floor((now - date) / 1000);
+
+  const rtf = new Intl.RelativeTimeFormat('en', { numeric: 'auto' });
+
+  if (diffInSeconds < 60) {
+    return rtf.format(-diffInSeconds, 'second');
+  }
+
+  const diffInMinutes = Math.floor(diffInSeconds / 60);
+  if (diffInMinutes < 60) {
+    return rtf.format(-diffInMinutes, 'minute');
+  }
+
+  const diffInHours = Math.floor(diffInMinutes / 60);
+  if (diffInHours < 24) {
+    return rtf.format(-diffInHours, 'hour');
+  }
+
+  const diffInDays = Math.floor(diffInHours / 24);
+  if (diffInDays < 30) {
+    return rtf.format(-diffInDays, 'day');
+  }
+
+  const diffInMonths = Math.floor(diffInDays / 30);
+  if (diffInMonths < 12) {
+    return rtf.format(-diffInMonths, 'month');
+  }
+
+  const diffInYears = Math.floor(diffInMonths / 12);
+  return rtf.format(-diffInYears, 'year');
+}
+
 class App {
   constructor() {
-    this.posts = [
-      "1) Welcome to TextTok!",
-      "2) Here's your second post.",
-      "3) Swipe up to discover more.",
-      "4) Keep scrolling to read more text-based content.",
-    ];
+    this.posts = [];
     this.currentIndex = 0;
     this.nextIndex = null;
     this.direction = null;
@@ -38,6 +67,7 @@ class App {
 
     this.setupScrollHandler();
     this.renderPosts();
+    this.getPosts();
   }
 
   updateCharCount(e) {
@@ -72,14 +102,11 @@ class App {
       if ('Err' in create_res) {
         alert(`Create post error: ${JSON.stringify(create_res.Err)}`);
       } else {
-        alert("Post created!");
-        const post_id = create_res.Ok;
-        const contents = await dhisper_backend.kay4_contents_of([post_id]);
+        const id = create_res.Ok;
+        const contents = await dhisper_backend.kay4_contents_of([id]);
         
-        this.posts = []
-        for (const content of contents) {
-          this.posts.push(content);
-        }
+        this.posts = [{ id, content: contents[0].length > 0? contents[0][0] : "" }];
+        
         this.currentIndex = 0;
         this.isComposing = false;
         this.postContent = '';
@@ -87,14 +114,38 @@ class App {
         this.assetType = 'None';
   
         this.startSlide(0, 'down');
+        this.getPosts();
       }
     } catch (e) {
       this.isSending = false;
     }
-
-    
   }
-  
+
+  async getPosts() {
+    let post_ids = [];
+    if (this.posts.length > 0) {
+      const last_post_id = this.posts[this.posts.length - 1].id;
+      post_ids = await dhisper_backend.kay4_posts([], [last_post_id], []); 
+    }
+    if (post_ids.length == 0) post_ids = await dhisper_backend.kay4_posts([], [], []);
+
+    const posts = [];
+    for (const id of post_ids) posts.push({ id });
+    if (posts.length == 0) return;
+    await Promise.all([
+      new Promise((resolve) => {(async () => {
+        const contents = await dhisper_backend.kay4_contents_of(post_ids);
+        for (const i in contents) posts[i]['content'] = contents[i].length > 0? contents[i][0] : "";
+        resolve();
+      })()}),
+      new Promise((resolve) => {(async () => {
+        const timestamps = await dhisper_backend.kay4_timestamps_of(post_ids);
+        for (const i in timestamps) posts[i]['timestamp'] = timestamps[i].length > 0? new Date(Number() / 1000000) : null;
+        resolve();
+      })()})
+    ]);
+    for (const post of posts) this.posts.push(post);
+  }
 
   setupScrollHandler() {
     window.addEventListener('wheel', (e) => {
@@ -136,20 +187,19 @@ class App {
   }
 
   renderPosts() {
-    const currentPost = this.posts[this.currentIndex];
+    const currentPost = this.posts.length > 0? this.posts[this.currentIndex] : { content: 'No posts yet', timestamp: '' };
     const nextPost = this.nextIndex !== null ? this.posts[this.nextIndex] : null;
 
     const postLayers = html`
       <div class="post-layer current ${this.direction === 'up' ? 'slide-out-up' : this.direction === 'down' ? 'slide-out-down' : ''}"
           style="background: ${this.background}">
-        <div class="text">${currentPost}</div>
+        <div class="text">${currentPost.content}</div>
       </div>
-
       ${nextPost !== null
         ? html`
             <div class="post-layer next ${this.direction === 'up' ? 'slide-in-up' : 'slide-in-down'}"
                 style="background: ${this.nextBackground}">
-              <div class="text">${nextPost}</div>
+              <div class="text">${nextPost.content}</div>
             </div>
           `
         : null}
