@@ -64,6 +64,9 @@ class App {
     this.assetType = "None";
     this.root = document.getElementById('root');
     this.background = this.getRandomGradient();
+    this.isCommentOpen = false;
+    this.activeThread = null;
+    this.threadComments = [];
 
     this.setupScrollHandler();
     this.renderPosts();
@@ -126,8 +129,7 @@ class App {
     if (this.posts.length > 0) {
       const last_post_id = this.posts[this.posts.length - 1].id;
       post_ids = await dhisper_backend.kay4_posts([], [last_post_id], []); 
-    }
-    if (post_ids.length == 0) post_ids = await dhisper_backend.kay4_posts([], [], []);
+    } else post_ids = await dhisper_backend.kay4_posts([], [], []);
 
     const posts = [];
     for (const id of post_ids) posts.push({ id });
@@ -140,17 +142,19 @@ class App {
       })()}),
       new Promise((resolve) => {(async () => {
         const timestamps = await dhisper_backend.kay4_timestamps_of(post_ids);
-        for (const i in timestamps) posts[i]['timestamp'] = timestamps[i].length > 0? new Date(Number() / 1000000) : null;
+        for (const i in timestamps) posts[i]['timestamp'] = timestamps[i].length > 0? new Date(Number(timestamps[i][0]) / 1000000) : null;
         resolve();
       })()})
     ]);
     for (const post of posts) this.posts.push(post);
+    this.renderPosts();
   }
 
   setupScrollHandler() {
     window.addEventListener('wheel', (e) => {
       if (this.isAnimating) return;
       if (this.isComposing) return;
+      if (this.isCommentOpen) return;
 
       if (e.deltaY > 0 && this.currentIndex < this.posts.length - 1) {
         this.startSlide(this.currentIndex + 1, 'up');
@@ -186,20 +190,40 @@ class App {
     alert("Create Post clicked!");
   }
 
+  handleCommentClick(post) {
+    this.activeThread = post;
+    this.isCommentOpen = true;
+    this.renderPosts(); // re-render to show the comment UI
+  }
+
   renderPosts() {
-    const currentPost = this.posts.length > 0? this.posts[this.currentIndex] : { content: 'No posts yet', timestamp: '' };
+    const currentPost = this.posts.length > 0? this.posts[this.currentIndex] : { content: 'Create the first post by clicking the "+" below!', timestamp: '' };
     const nextPost = this.nextIndex !== null ? this.posts[this.nextIndex] : null;
 
     const postLayers = html`
       <div class="post-layer current ${this.direction === 'up' ? 'slide-out-up' : this.direction === 'down' ? 'slide-out-down' : ''}"
           style="background: ${this.background}">
-        <div class="text">${currentPost.content}</div>
+        <div class="post-content-wrapper">
+          <div class="text">${currentPost.content}</div>
+          <div class="post-actions-right">
+            <button class="comment-btn" @click=${() => this.handleCommentClick(currentPost)}>
+              💬 ${currentPost.comment_count || 0}
+            </button>
+          </div>
+        </div>
       </div>
       ${nextPost !== null
         ? html`
             <div class="post-layer next ${this.direction === 'up' ? 'slide-in-up' : 'slide-in-down'}"
                 style="background: ${this.nextBackground}">
-              <div class="text">${nextPost.content}</div>
+              <div class="post-content-wrapper">
+                <div class="text">${nextPost.content}</div>
+                <div class="post-actions-right">
+                  <button class="comment-btn" @click=${() => this.handleCommentClick(nextPost)}>
+                    💬 ${nextPost.comment_count || 0}
+                  </button>
+                </div>
+              </div>
             </div>
           `
         : null}
@@ -258,6 +282,43 @@ class App {
         </form>
       </div>
     `;
+    const commentSection = this.isCommentOpen && this.activeThread
+    ? html`
+        <div class="comment-panel slide-in">
+          <button class="close-btn" @click=${() => {
+            const panel = document.querySelector('.comment-panel');
+            if (panel) {
+              panel.classList.remove('slide-in');
+              panel.classList.add('slide-out');
+              setTimeout(() => {
+                this.isCommentOpen = false;
+                this.activeThread = null;
+                this.renderPosts();
+              }, 500); // matches slideOut animation duration
+            }
+          }}>✕</button>
+  
+          <div class="comment-list">
+            <div class="thread-post">
+              <div class="meta">#${this.activeThread.id} • ${this.activeThread.timestamp ? timeAgo(this.activeThread.timestamp) : "Unknown time"}</div>
+              <div class="content">${this.activeThread.content}</div>
+            </div>
+  
+            ${this.threadComments.map(comment => html`
+              <div class="comment">
+                <div class="meta">#${comment.id} • ${this.activeThread.timestamp ? timeAgo(comment.timestamp) : "Unknown time"}</div>
+                <div class="content">${comment.content}</div>
+              </div>
+            `)}
+          </div>
+  
+          <button class="add-comment-btn">
+            ➕ Add a Comment
+          </button>
+        </div>
+      `
+    : null;
+
     render(html`
       <div class="post-wrapper">
         ${postLayers}
@@ -266,6 +327,7 @@ class App {
           this.isComposing = true; 
           this.renderPosts();
         }}>+</button>
+        ${commentSection}
       </div>
     `, this.root);
   }

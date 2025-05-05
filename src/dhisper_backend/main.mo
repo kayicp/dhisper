@@ -17,7 +17,9 @@ import Batcher "../util/motoko/Batcher";
 import Option "../util/motoko/Option";
 import Queue "../util/motoko/StableCollections/Queue";
 
-shared (install) actor class Canister(deploy : {}) = Self {
+shared (install) actor class Canister(
+  // deploy : {}
+) = Self {
   func self() : Principal = Principal.fromActor(Self);
   stable var metadata : Value.Metadata = RBTree.empty();
   stable var logs = Queue.empty<Text>();
