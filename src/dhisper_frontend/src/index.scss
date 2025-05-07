@@ -468,3 +468,119 @@ option {
   transform: scale(0.95);
   box-shadow: 0 0 15px rgba(255, 110, 196, 0.4);
 }
+
+.comment-form {
+  position: fixed;
+  max-width: 100%;
+  width: 100%;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  margin: 0 auto;
+  background: linear-gradient(145deg, #1e1e2f, #2e2e3f);
+  box-shadow: 0 -10px 30px rgba(0, 0, 0, 0.6);
+  padding: 1.5rem;
+  border-top-left-radius: 20px;
+  border-top-right-radius: 20px;
+  animation: slideUp 0.4s ease forwards;
+  z-index: 60;
+  backdrop-filter: blur(12px);
+}
+
+@keyframes slideUp {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+@keyframes slideDown {
+  from {
+    transform: translateY(0);
+  }
+  to {
+    transform: translateY(100%);
+  }
+}
+
+.slide-down {
+  animation: slideDown 0.4s ease forwards;
+}
+
+.form-row {
+  margin-bottom: 1rem;
+  display: flex;
+  flex-direction: column;
+}
+
+input[type="text"],
+select {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  padding: 0.75rem 1rem;
+  border-radius: 12px;
+  color: white;
+  font-size: 1rem;
+  width: 100%;
+  transition: border 0.2s ease, box-shadow 0.2s ease;
+}
+
+input:focus,
+select:focus {
+  border-color: #ff6ec4;
+  box-shadow: 0 0 10px rgba(255, 110, 196, 0.4);
+  outline: none;
+}
+
+.char-count {
+  font-size: 0.9rem;
+  text-align: right;
+  margin-top: 0.2rem;
+  color: #aaa;
+}
+
+.char-count.limit {
+  color: red;
+}
+
+.info-label {
+  font-size: 0.85rem;
+  color: #ccc;
+  margin-top: -0.5rem;
+  margin-bottom: 0.8rem;
+  padding-left: 0.5rem;
+}
+
+.comment-close-btn {
+  position: absolute;
+  top: 10px;
+  right: 14px;
+  background: linear-gradient(145deg, #ff6ec4, #7873f5);
+  color: white;
+  border: none;
+  font-size: 1.2rem;
+  padding: 0.4rem 0.7rem;
+  border-radius: 50%;
+  box-shadow: 0 0 10px rgba(255, 110, 196, 0.5);
+  cursor: pointer;
+  z-index: 2;
+  transition: all 0.2s ease;
+}
+
+.comment-close-btn:hover {
+  transform: scale(1.1);
+  box-shadow: 0 0 15px rgba(255, 110, 196, 0.8);
+}
+
+.comment-close-btn:active {
+  transform: scale(0.9);
+  box-shadow: 0 0 5px rgba(255, 110, 196, 0.8);
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}

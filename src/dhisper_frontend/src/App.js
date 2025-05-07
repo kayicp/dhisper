@@ -67,6 +67,12 @@ class App {
     this.isCommentOpen = false;
     this.activeThread = null;
     this.threadComments = [];
+    this.isCommentFormOpen = false;
+    this.commentInput = "";
+    this.commentCharCount = 0;
+    this.commentAssetType = "None";
+    this.commentSubaccount = "";
+    this.commentToken = "ICP";  
 
     this.setupScrollHandler();
     this.renderPosts();
@@ -106,9 +112,21 @@ class App {
         alert(`Create post error: ${JSON.stringify(create_res.Err)}`);
       } else {
         const id = create_res.Ok;
-        const contents = await dhisper_backend.kay4_contents_of([id]);
-        
-        this.posts = [{ id, content: contents[0].length > 0? contents[0][0] : "" }];
+        let content = '';
+        let timestamp = '';
+        await Promise.all([
+          new Promise((resolve) => {(async () => {
+            const contents = await dhisper_backend.kay4_contents_of([id]);
+            content = contents[0].length > 0? contents[0][0] : "";
+            resolve();
+          })()}),
+          new Promise((resolve) => {(async () => {
+            const timestamps = await dhisper_backend.kay4_timestamps_of([id]);
+            timestamp = timestamps[0].length > 0? new Date(Number(timestamps[0][0]) / 1000000) : null;
+            resolve();
+          })()}),
+        ]);
+        this.posts = [{ id, content, timestamp }];
         
         this.currentIndex = 0;
         this.isComposing = false;
@@ -117,7 +135,6 @@ class App {
         this.assetType = 'None';
   
         this.startSlide(0, 'down');
-        this.getPosts();
       }
     } catch (e) {
       this.isSending = false;
@@ -128,8 +145,8 @@ class App {
     let post_ids = [];
     if (this.posts.length > 0) {
       const last_post_id = this.posts[this.posts.length - 1].id;
-      post_ids = await dhisper_backend.kay4_posts([], [last_post_id], []); 
-    } else post_ids = await dhisper_backend.kay4_posts([], [], []);
+      post_ids = await dhisper_backend.kay4_threads([last_post_id], []); 
+    } else post_ids = await dhisper_backend.kay4_threads([], []);
 
     const posts = [];
     for (const id of post_ids) posts.push({ id });
@@ -155,6 +172,7 @@ class App {
       if (this.isAnimating) return;
       if (this.isComposing) return;
       if (this.isCommentOpen) return;
+      if (this.isCommentFormOpen) return;
 
       if (e.deltaY > 0 && this.currentIndex < this.posts.length - 1) {
         this.startSlide(this.currentIndex + 1, 'up');
@@ -174,6 +192,8 @@ class App {
     this.direction = direction;
     this.nextBackground = this.getRandomGradient();
 
+    if (newIndex == this.posts.length - 1) this.getPosts();
+
     this.renderPosts();
 
     setTimeout(() => {
@@ -186,14 +206,94 @@ class App {
     }, 600);
   }
 
-  handleCreatePost() {
-    alert("Create Post clicked!");
-  }
-
   handleCommentClick(post) {
     this.activeThread = post;
     this.isCommentOpen = true;
     this.renderPosts(); // re-render to show the comment UI
+    this.getComments();
+  }
+
+  async getComments() {
+    const thread_id = this.activeThread.id;
+    const replies = [];
+    let content_count = 0;
+    let timestamp_count = 0;
+    while (true) {
+      const reply_ids = await dhisper_backend.kay4_replies_of(thread_id, [], []);
+      if (reply_ids.length == 0) break;
+      for (const id of reply_ids) replies.push({ id });
+      await Promise.all([
+        new Promise((resolve) => {(async () => {
+          const contents = await dhisper_backend.kay4_contents_of(reply_ids);
+          for (const i in contents) {
+            replies[content_count + +i]['content'] = contents[i].length > 0? contents[i][0] : "";
+          };
+          content_count += contents.length;
+          resolve();
+        })()}),
+        new Promise((resolve) => {(async () => {
+          const timestamps = await dhisper_backend.kay4_timestamps_of(reply_ids);
+          for (const i in timestamps) {
+            replies[timestamp_count + +i]['timestamp'] = timestamps[i].length > 0? new Date(Number(timestamps[i][0]) / 1000000) : null;
+          };
+          timestamp_count += timestamps.length;
+          resolve();
+        })()})
+      ]);
+    }
+    this.threadComments = replies;
+    this.renderPosts();
+  }
+
+  closeCommentForm() {
+    const form = document.querySelector('.comment-form');
+    if (form) {
+      form.classList.remove('slide-up');
+      form.classList.add('slide-down');
+      setTimeout(() => {
+        this.isCommentFormOpen = false;
+        this.renderPosts();
+      }, 400); // must match animation duration
+    }
+  }
+
+  async handleCommentSend() {
+    this.commentInput = !this.commentInput ? "" : this.commentInput.trim();
+    if (this.commentInput.length === 0) return;
+
+    const comment_res = await dhisper_backend.kay4_create({
+      thread: [this.activeThread.id],
+      content: this.commentInput,
+      files: [],
+      owners: [],
+      metadata: [],
+      authorization: { None: { subaccount: [] } },
+    });
+    if ('Err' in comment_res) {
+      alert(`Send comment error: ${JSON.stringify(comment_res.Err)}`);
+    } else {
+      const id = comment_res.Ok;
+      let content = '';
+      let timestamp = '';
+      await Promise.all([
+        new Promise((resolve) => {(async () => {
+          const contents = await dhisper_backend.kay4_contents_of([id]);
+          content = contents[0].length > 0? contents[0][0] : "";
+          resolve();
+        })()}),
+        new Promise((resolve) => {(async () => {
+          const timestamps = await dhisper_backend.kay4_timestamps_of([id]);
+          timestamp = timestamps[0].length > 0? new Date(Number(timestamps[0][0]) / 1000000) : null;
+          resolve();
+        })()}),
+      ]);
+      this.commentInput = "";
+      this.commentCharCount = 0;
+      this.isCommentFormOpen = false;
+      this.threadComments.push({ id, content, timestamp });
+      this.commentAssetType = 'None';
+      this.renderPosts();
+    }
   }
 
   renderPosts() {
@@ -205,11 +305,11 @@ class App {
           style="background: ${this.background}">
         <div class="post-content-wrapper">
           <div class="text">${currentPost.content}</div>
-          <div class="post-actions-right">
+          ${this.posts.length > 0? html`<div class="post-actions-right">
             <button class="comment-btn" @click=${() => this.handleCommentClick(currentPost)}>
               💬 ${currentPost.comment_count || 0}
             </button>
-          </div>
+          </div>` : ''}
         </div>
       </div>
       ${nextPost !== null
@@ -218,11 +318,11 @@ class App {
                 style="background: ${this.nextBackground}">
               <div class="post-content-wrapper">
                 <div class="text">${nextPost.content}</div>
-                <div class="post-actions-right">
+                ${this.posts.length > 0? html`<div class="post-actions-right">
                   <button class="comment-btn" @click=${() => this.handleCommentClick(nextPost)}>
                     💬 ${nextPost.comment_count || 0}
                   </button>
-                </div>
+                </div>` : ''}
               </div>
             </div>
           `
@@ -282,7 +382,8 @@ class App {
         </form>
       </div>
     `;
-    const commentSection = this.isCommentOpen && this.activeThread
+    console.log('comments:', this.threadComments);
+    const commentSection = this.posts.length > 0 && this.isCommentOpen && this.activeThread
     ? html`
         <div class="comment-panel slide-in">
           <button class="close-btn" @click=${() => {
@@ -295,6 +396,7 @@ class App {
                 this.activeThread = null;
                 this.renderPosts();
               }, 500); // matches slideOut animation duration
+              this.closeCommentForm();
             }
           }}>✕</button>
   
@@ -306,18 +408,100 @@ class App {
   
             ${this.threadComments.map(comment => html`
               <div class="comment">
-                <div class="meta">#${comment.id} • ${this.activeThread.timestamp ? timeAgo(comment.timestamp) : "Unknown time"}</div>
+                <div class="meta">#${comment.id} • ${comment.timestamp ? timeAgo(comment.timestamp) : "Unknown time"}</div>
                 <div class="content">${comment.content}</div>
               </div>
             `)}
           </div>
   
-          <button class="add-comment-btn">
+          <button class="add-comment-btn" @click=${() => {
+            this.isCommentFormOpen = true;
+            this.renderPosts();
+          }}>
             ➕ Add a Comment
           </button>
         </div>
       `
     : null;
+    const commentForm = commentSection && this.isCommentFormOpen
+    ? html`
+        <div
+          class="comment-form-overlay"
+          @click=${(e) => {
+            if (e.target.classList.contains('comment-form-overlay')) {
+              this.closeCommentForm();
+            }
+          }}
+        >
+          <div class="comment-form slide-up">
+            <div class="form-row">
+              <button class="comment-close-btn" @click=${() => this.closeCommentForm()}>✕</button>
+              <input
+                type="text"
+                placeholder="Write your comment..."
+                maxlength="140"
+                .value=${this.commentInput}
+                @input=${(e) => {
+                  this.commentInput = e.target.value;
+                  this.commentCharCount = e.target.value.length;
+                  this.renderPosts();
+                }}
+              />
+              <div class="char-count ${this.commentCharCount >= 140 ? 'limit' : ''}">
+                ${this.commentCharCount}/140
+              </div>
+            </div>
+    
+            <div class="form-row">
+              <select
+                .value=${this.commentAssetType}
+                @change=${(e) => {
+                  this.commentAssetType = e.target.value;
+                  this.renderPosts();
+                }}
+              >
+                <option value="None">None</option>
+                <option value="ICRC_1">ICRC_1</option>
+                <option value="ICRC_2">ICRC_2</option>
+              </select>
+            </div>
+    
+            <div class="form-row">
+              <input
+                type="text"
+                placeholder="Subaccount (hex, optional)"
+                .value=${this.commentSubaccount}
+                @input=${(e) => {
+                  this.commentSubaccount = e.target.value;
+                }}
+              />
+            </div>
+    
+            ${this.commentAssetType === 'ICRC_1'
+              ? html`<div class="info-label">Your balance: 1.5 ICP, Token minimum: 1 ICP</div>`
+              : this.commentAssetType === 'ICRC_2'
+              ? html`
+                  <div class="form-row">
+                    <select
+                      .value=${this.commentToken}
+                      @change=${(e) => {
+                        this.commentToken = e.target.value;
+                      }}
+                    >
+                      <option value="ICP">Internet Computer (ICP)</option>
+                      <option value="ckBTC">ckBTC (ckBTC)</option>
+                    </select>
+                  </div>
+                  <div class="info-label">Fee: 0</div>
+                `
+              : null}
+    
+            <div class="form-row">
+              <button class="send-btn" @click=${() => this.handleCommentSend()}>🚀 Send</button>
+            </div>
+          </div>
+        </div>
+      ` : null;
 
     render(html`
       <div class="post-wrapper">
@@ -328,6 +512,7 @@ class App {
           this.renderPosts();
         }}>+</button>
         ${commentSection}
+        ${commentForm}
       </div>
     `, this.root);
   }

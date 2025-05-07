@@ -343,7 +343,7 @@ shared (install) actor class Canister(
 
   public shared query func kay4_threads(prev : ?Nat, take : ?Nat) : async [Nat] {
     let _take = Pager.cleanTake(take, Value.metaNat(metadata, Kay4.MAX_TAKE), Value.metaNat(metadata, Kay4.DEFAULT_TAKE), RBTree.size(threads));
-    RBTree.pageKey(threads, Nat.compare, prev, _take);
+    RBTree.pageKeyReverse(threads, Nat.compare, prev, _take);
   };
   public shared query func kay4_replies_of(thread_id : Nat, prev : ?Nat, take : ?Nat) : async [Nat] {
     let replies = switch (RBTree.get(threads, Nat.compare, thread_id)) {

@@ -38,7 +38,7 @@ module {
 		phash : ?Blob; // hash of previous version, 1st version is null
 	};
 	public type Post = {
-		thread : ?Nat;
+		thread : ?Nat; // todo: remove this
 		versions : RBTree.RBTree<Nat, Must>;
 		content_versions : RBTree.RBTree<Nat, Text>;
 		files_versions : RBTree.RBTree<Nat, RBTree.RBTree<Text, ()>>;
