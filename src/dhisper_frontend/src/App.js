@@ -194,6 +194,7 @@ class App {
 
     if (newIndex == this.posts.length - 1) this.getPosts();
 
+    this.threadComments = [];
     this.renderPosts();
 
     setTimeout(() => {
@@ -219,9 +220,12 @@ class App {
     let content_count = 0;
     let timestamp_count = 0;
     while (true) {
-      const reply_ids = await dhisper_backend.kay4_replies_of(thread_id, [], []);
+      const last = replies.length - 1;
+      const prev = replies.length == 0? [] : [replies[last].id];
+      const reply_ids = await dhisper_backend.kay4_replies_of(thread_id, prev, []);
       if (reply_ids.length == 0) break;
       for (const id of reply_ids) replies.push({ id });
+      console.log({ replies });
       await Promise.all([
         new Promise((resolve) => {(async () => {
           const contents = await dhisper_backend.kay4_contents_of(reply_ids);
