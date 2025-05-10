@@ -1,12 +1,20 @@
 import Value "../Value";
 import Kay2 "../Kay2_Authorization";
 import RBTree "../StableCollections/RedBlackTree/RBTree";
+import Error "../Error";
 
 module {
 	public type CreateReportArg = {
 		subaccount : ?Blob;
 		subject : Value.Type; // for many types of key, eg: { post: { id: 5; version: 2 } }
-		reason : Text;
+		comment : Text;
+	};
+	type TooLargeErr = { current_size : Nat; maximum_size : Nat };
+	public type CreateReportError = {
+		#GenericError : Error.Type;
+		#DuplicateSubject : { id : Nat };
+		#UnknownSubject;
+		#CommentTooLarge : TooLargeErr;
 	};
 	public type ModerateArg = {
 		subaccount : ?Blob;
@@ -14,11 +22,17 @@ module {
 		report_agreement : Bool;
 		comment : Text;
 	};
+	public type ModerateError = {
+		#GenericError : Error.Type;
+		#UnknownReport;
+		#CommentTooLarge : TooLargeErr;
+	};
 	public type AppealArg = {
 		subaccount : ?Blob;
 		report_id : Nat;
-		reason : Text;
+		comment : Text;
 	};
+	public type AppearError = ModerateError;
 	public type Moderation = {
 		moderator : Kay2.Identity;
 		report_agreement : Bool;
@@ -26,7 +40,7 @@ module {
 	};
 	public type Appeal = {
 		author : Kay2.Identity;
-		reason : Text;
+		comment : Text;
 	};
 	public type Status = {
 		#Moderated : Moderation;
@@ -35,7 +49,7 @@ module {
 	public type Report = {
 		author : Kay2.Identity;
 		subject : Value.Type;
-		reason : Text;
+		comment : Text;
 		timestamp : Nat64;
 		statuses : RBTree.RBTree<Nat64, Status>;
 	};
