@@ -5,7 +5,7 @@ import Error "../Error";
 
 module {
 	public type CreateReportArg = {
-		subaccount : ?Blob;
+		commitment : Kay2.Authorization;
 		subject : Value.Type; // for many types of key, eg: { post: { id: 5; version: 2 } }
 		comment : Text;
 	};
@@ -15,9 +15,10 @@ module {
 		#DuplicateSubject : { id : Nat };
 		#UnknownSubject;
 		#CommentTooLarge : TooLargeErr;
+		#Unauthorized : Kay2.Unauthorized;
 	};
 	public type ModerateArg = {
-		subaccount : ?Blob;
+		authorization : Kay2.Authorization;
 		report_id : Nat;
 		report_agreement : Bool;
 		comment : Text;
@@ -26,9 +27,10 @@ module {
 		#GenericError : Error.Type;
 		#UnknownReport;
 		#CommentTooLarge : TooLargeErr;
+		#Unauthorized : Kay2.Unauthorized;
 	};
 	public type AppealArg = {
-		subaccount : ?Blob;
+		authorization : Kay2.Authorization;
 		report_id : Nat;
 		comment : Text;
 	};
@@ -37,10 +39,12 @@ module {
 		moderator : Kay2.Identity;
 		report_agreement : Bool;
 		comment : Text;
+		phash : Blob;
 	};
 	public type Appeal = {
 		author : Kay2.Identity;
 		comment : Text;
+		phash : Blob;
 	};
 	public type Status = {
 		#Moderated : Moderation;
@@ -52,5 +56,6 @@ module {
 		comment : Text;
 		timestamp : Nat64;
 		statuses : RBTree.RBTree<Nat64, Status>;
+		hash : Blob;
 	};
 };

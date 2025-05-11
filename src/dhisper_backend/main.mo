@@ -17,6 +17,8 @@ import Batcher "../util/motoko/Batcher";
 import Option "../util/motoko/Option";
 import Queue "../util/motoko/StableCollections/Queue";
 
+// todo: for dhisper, replace the post completely when deleting
+
 shared (install) actor class Canister(
   // deploy : {}
 ) = Self {
