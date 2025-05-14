@@ -167,7 +167,7 @@ shared (install) actor class Canister(
 
       if (arg.files.size() > 0) return Error.text("File system not implemented yet.");
       // todo later: implement file storing
-
+      // todo: check locker
       let (authorization, owner) = switch (arg.authorization) {
         case (#None auth) (#None { auth with owner = caller }, #ICRC_1 { auth with owner = caller });
         case (#ICRC_1 auth) {
