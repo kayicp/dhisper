@@ -17,14 +17,14 @@ module {
 	public let MAX_APPEALS_PER_REPORT = "kay5:max_appeals_per_report";
 	// public let MODERATION_BONUS_WINDOW
 	// public let RESOLVE_BONUS_WINDOW
-	public type CreateReportArg = {
+	public type ReportArg = {
 		subject : [(Text, Value.Type)]; // for many types of key, eg: { post: { id: 5; version: 2 } }
 		commitment : Kay2.Authorization;
 		comment : Text;
 		verdict : ?Bool;
 	};
 	type TooLargeErr = { current_size : Nat; maximum_size : Nat };
-	public type CreateReportError = {
+	public type ReportError = {
 		#GenericError : Error.Type;
 		#DuplicateSubject : { report_id : Nat };
 		#BadSubjectKey : { key : Text; expected_type : Text };
@@ -66,10 +66,18 @@ module {
 		#AppealWindowClosed : { moderated_at : Nat64; appeal_window : Nat64 };
 		#Appealed : {
 			timestamp : Nat64;
-			author : Kay2.Authorized;
+			appealer : Kay2.Authorized;
 			comment : Text;
 			phash : Blob;
 		};
+		#Unauthorized : Kay2.Unauthorized;
+	};
+	public type ResolveArg = AppealArg;
+	public type ResolveError = {
+		#GenericError : Error.Type;
+		#UnknownReport;
+		#Resolved : ReportResolved;
+		#CommentTooLarge : TooLargeErr;
 		#Unauthorized : Kay2.Unauthorized;
 	};
 	public type Moderation = {
@@ -78,28 +86,18 @@ module {
 		comment : Text;
 		phash : Blob;
 	};
-	public type ResolveArg = {
-		report_id : Nat;
-	};
-	public type ResolveError = {
-		#GenericError : Error.Type;
-		#UnknownReport;
-		#Resolved : ReportResolved;
-		#CommentTooLarge : TooLargeErr;
-		#Unauthorized : Kay2.Unauthorized;
-	};
 	public type Appeal = {
-		author : Kay2.Authorized;
+		appealer : Kay2.Authorized;
 		comment : Text;
 		phash : Blob;
 	};
 	public type Status = {
 		#Moderated : Moderation;
 		#Appealed : Appeal;
-		#Resolved : { comment : Text; phash : Blob };
+		#Resolved : { resolver : Kay2.Authorized; comment : Text; phash : Blob };
 	};
 	public type Report = {
-		author : Kay2.Authorized;
+		reporter : Kay2.Authorized;
 		subject : [(Text, Value.Type)];
 		comment : Text;
 		timestamp : Nat64;
@@ -108,7 +106,7 @@ module {
 	};
 	public func createReport(
 		arg : {
-			author : Kay2.Authorized;
+			reporter : Kay2.Authorized;
 			subject : [(Text, Value.Type)];
 			comment : Text;
 			timestamp : Nat64;
@@ -136,12 +134,24 @@ module {
 	public func appeal(
 		report : Report,
 		{
-			author : Kay2.Authorized;
+			appealer : Kay2.Authorized;
 			comment : Text;
 			timestamp : Nat64;
 		},
 	) : Report {
-		let statuses = RBTree.insert(report.statuses, Nat64.compare, timestamp, #Appealed { author; comment; phash = report.hash });
+		let statuses = RBTree.insert(report.statuses, Nat64.compare, timestamp, #Appealed { appealer; comment; phash = report.hash });
+		// todo: hash
+		{ report with statuses };
+	};
+	public func resolve(
+		report : Report,
+		{
+			resolver : Kay2.Authorized;
+			comment : Text;
+			timestamp : Nat64;
+		},
+	) : Report {
+		let statuses = RBTree.insert(report.statuses, Nat64.compare, timestamp, #Resolved { resolver; comment; phash = report.hash });
 		// todo: hash
 		{ report with statuses };
 	};

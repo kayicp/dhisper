@@ -119,6 +119,14 @@ shared (install) actor class Canister(
 		#Ok(token, expected_fee);
 	};
 
+	private func getMaster() : Result.Type<(Principal, Dhisper_Main.Canister), Error.Generic> {
+		let master = switch (Value.metaPrincipal(metadata, Kay5.MASTER)) {
+			case (?found) found;
+			case _ return Error.text("Metadata `" # Kay5.MASTER # "` is missing");
+		};
+		#Ok(master, actor (Principal.toText(master)));
+	};
+
 	private func isMod(reputation_can : Reputation_Main.Canister, reporter : Kay2.Identity) : async* Bool {
 		let max_mods = Value.getNat(metadata, Kay5.MAX_MODERATORS_SIZE, 0);
 		let mods = if (max_mods == 0)[] else await reputation_can.kay6_top(max_mods);
@@ -128,7 +136,7 @@ shared (install) actor class Canister(
 		false;
 	};
 
-	public shared ({ caller }) func kay5_create(arg : Kay5.CreateReportArg) : async Result.Type<Nat, Kay5.CreateReportError> {
+	public shared ({ caller }) func kay5_report(arg : Kay5.ReportArg) : async Result.Type<Nat, Kay5.ReportError> {
 		if (not Kay1.isAvailable(metadata)) return Error.text("Unavailable");
 		switch (RBTree.get(subjects, Value.compare, #Map(arg.subject))) {
 			case (?id) return #Err(#DuplicateSubject { report_id = id });
@@ -143,11 +151,10 @@ shared (install) actor class Canister(
 			case (?found) found;
 			case _ return #Err(#BadSubjectKey { key = "version"; expected_type = "Nat" });
 		};
-		let master = switch (Value.metaPrincipal(metadata, Kay5.MASTER)) {
-			case (?found) found;
-			case _ return Error.text("Metadata `" # Kay5.MASTER # "` is missing");
+		let (master, master_can) = switch (getMaster()) {
+			case (#Err err) return #Err err;
+			case (#Ok ok) ok;
 		};
-		let master_can = actor (Principal.toText(master)) : Dhisper_Main.Canister;
 		let reputation_can = switch (Value.metaPrincipal(metadata, Kay5.KAY_6_ID)) {
 			case (?found) actor (Principal.toText(found)) : Reputation_Main.Canister;
 			case _ return Error.text("Metadata `" # Kay5.KAY_6_ID # "` is missing");
@@ -157,15 +164,15 @@ shared (install) actor class Canister(
 		let max_comment_len = Value.getNat(metadata, Kay5.MAX_COMMENT_SIZE, 0);
 		let comment_len = Text.size(arg.comment);
 		// todo: check locker
-		let (authorization, identity, is_moderator) = switch (arg.commitment) {
+		let (reporter, identity, is_moderator) = switch (arg.commitment) {
 			case (#ICRC_2 auth) {
-				let reporter = { auth with owner = caller };
-				if (await* isMod(reputation_can, #ICRC_1 reporter)) return Error.text("You are a moderator; you should not pay commitment fee");
+				let account = { auth with owner = caller };
+				if (await* isMod(reputation_can, #ICRC_1 account)) return Error.text("You are a moderator; you should not pay commitment fee");
 				switch (arg.verdict) {
 					case (?found) return Error.text("You cannot give a verdict because you are not a moderator");
 					case _ ();
 				};
-				switch (await* canReport(master_can, post, version, #ICRC_1 reporter)) {
+				switch (await* canReport(master_can, post, version, #ICRC_1 account)) {
 					case (#Err err) return #Err err;
 					case _ ();
 				};
@@ -175,7 +182,7 @@ shared (install) actor class Canister(
 				};
 				let transfer_from_args = {
 					amount = expected_fee;
-					from = reporter;
+					from = account;
 					to = { owner = master; subaccount = null };
 					fee = null;
 					spender_subaccount = null;
@@ -191,29 +198,29 @@ shared (install) actor class Canister(
 					};
 					case (#Ok ok) ok;
 				};
-				(#ICRC_2 { auth with owner = caller; xfer = transfer_from_id }, #ICRC_1 reporter, false);
+				(#ICRC_2 { auth with owner = caller; xfer = transfer_from_id }, #ICRC_1 account, false);
 			};
 			case (#None auth) {
-				let reporter = { auth with owner = caller };
-				let is_mod = await* isMod(reputation_can, #ICRC_1 reporter);
+				let account = { auth with owner = caller };
+				let is_mod = await* isMod(reputation_can, #ICRC_1 account);
 				if (not is_mod) return Error.text("You are not a moderator; you must pay the commitment fee");
-				switch (await* canReport(master_can, post, version, #ICRC_1 reporter)) {
+				switch (await* canReport(master_can, post, version, #ICRC_1 account)) {
 					case (#Err err) return #Err err;
 					case _ ();
 				};
 				if (max_comment_len > 0 and comment_len > max_comment_len) return #Err(#CommentTooLarge { current_size = comment_len; maximum_size = max_comment_len });
-				(#None reporter, #ICRC_1 reporter, true);
+				(#None account, #ICRC_1 account, true);
 			};
 			case _ return Error.text("ICRC-1 & ICRC-7 authorizations are not available");
 		};
 		var new_report = Kay5.createReport({
-			arg with author = authorization;
+			arg with reporter;
 			timestamp = Time64.nanos();
 		});
 		let new_report_id = report_id;
 		if (is_moderator) switch (arg.verdict) {
 			case (?found) {
-				new_report := Kay5.moderate(new_report, { moderator = authorization; verdict = found; comment = ""; timestamp = new_report.timestamp });
+				new_report := Kay5.moderate(new_report, { moderator = reporter; verdict = found; comment = ""; timestamp = new_report.timestamp });
 				// if (found) {
 				//   let appeal_window = Time64.SECONDS(Nat64.fromNat(Value.getNat(metadata, Kay5.APPEAL_WINDOW, 0)));
 				//   ignore if (appeal_window > 0) {
@@ -249,23 +256,23 @@ shared (install) actor class Canister(
 			case _ return Error.text("Metadata `" # Kay5.KAY_6_ID # "` is missing");
 		};
 		// todo: check locker
-		let (authorization, identity) = switch (arg.authorization) {
+		let (moderator, identity) = switch (arg.authorization) {
 			case (#None auth) {
-				let moderator = { auth with owner = caller };
+				let account = { auth with owner = caller };
 				// todo: make sure mod is not reporter nor appealer
-				let is_mod = await* isMod(reputation_can, #ICRC_1 moderator);
+				let is_mod = await* isMod(reputation_can, #ICRC_1 account);
 				if (not is_mod) return Error.text("You are not a moderator");
 				switch (RBTree.max(report.statuses)) {
 					case (?(ts, #Resolved status)) return #Err(#Resolved { status with timestamp = ts });
 					case (?(ts, #Moderated status)) return #Err(#Moderated { status with timestamp = ts });
 					case _ ();
 				};
-				(#None moderator, #ICRC_1 moderator);
+				(#None account, #ICRC_1 account);
 			};
 			case _ return Error.text("ICRC-1, ICRC-2, ICRC-7 authorizations are not available");
 		};
 		// todo: put cleantrimmed comment
-		let moderated = Kay5.moderate(report, { arg with moderator = authorization; timestamp = Time64.nanos() });
+		let moderated = Kay5.moderate(report, { arg with moderator; timestamp = Time64.nanos() });
 		reports := RBTree.insert(reports, Nat.compare, arg.report_id, moderated);
 		#Ok;
 	};
@@ -285,6 +292,10 @@ shared (install) actor class Canister(
 			case (?(ts, #Resolved status)) return #Err(#Resolved { status with timestamp = ts });
 			case (null) return Error.text("Report has no verdict yet");
 		};
+		// todo: change this based on moderator's verdict
+		// - if verdict true (agree w report), poster can appeal
+		// - if verdict false (agree w post), reporter can appeal
+		// todo: count how many appeals hv been made
 		var owners = await master_can.kay4_owners_at(post, version, null, null);
 		if (owners.size() == 0) return Error.text("Post does not exist");
 		while (owners.size() > 0) {
@@ -303,14 +314,9 @@ shared (install) actor class Canister(
 		let max_comment_len = Value.getNat(metadata, Kay5.MAX_COMMENT_SIZE, 0);
 		let comment_len = Text.size(arg.comment);
 
-		let master = switch (Value.metaPrincipal(metadata, Kay5.MASTER)) {
-			case (?found) found;
-			case _ return Error.text("Metadata `" # Kay5.MASTER # "` is missing");
-		};
-		let master_can = actor (Principal.toText(master)) : Dhisper_Main.Canister;
-		let reputation_can = switch (Value.metaPrincipal(metadata, Kay5.KAY_6_ID)) {
-			case (?found) actor (Principal.toText(found)) : Reputation_Main.Canister;
-			case _ return Error.text("Metadata `" # Kay5.KAY_6_ID # "` is missing");
+		let (master, master_can) = switch (getMaster()) {
+			case (#Err err) return #Err err;
+			case (#Ok ok) ok;
 		};
 		let subject = RBTree.fromArray(report.subject, Text.compare);
 		let post = switch (Value.metaNat(subject, "post")) {
@@ -322,10 +328,10 @@ shared (install) actor class Canister(
 			case _ return Error.text("`version` is missing from report's subject");
 		};
 		let now = Time64.nanos();
-		let authorization : Kay2.Authorized = switch (arg.authorization) {
+		let appealer = switch (arg.authorization) {
 			case (#ICRC_2 auth) {
-				let appealer = { auth with owner = caller };
-				switch (await* canAppeal({ master_can; post; version; appealer = #ICRC_1 appealer; now; report })) {
+				let account = { auth with owner = caller };
+				switch (await* canAppeal({ master_can; post; version; appealer = #ICRC_1 account; now; report })) {
 					case (#Err err) return #Err err;
 					case _ ();
 				};
@@ -335,7 +341,7 @@ shared (install) actor class Canister(
 				};
 				let transfer_from_args = {
 					amount = expected_fee;
-					from = appealer;
+					from = account;
 					to = { owner = master; subaccount = null };
 					fee = null;
 					spender_subaccount = null;
@@ -354,23 +360,39 @@ shared (install) actor class Canister(
 				#ICRC_2 { auth with owner = caller; xfer = transfer_from_id };
 			};
 			case (#None auth) {
-				let appealer = { auth with owner = caller };
-				switch (await* canAppeal({ master_can; post; version; appealer = #ICRC_1 appealer; now; report })) {
+				let account = { auth with owner = caller };
+				switch (await* canAppeal({ master_can; post; version; appealer = #ICRC_1 account; now; report })) {
 					case (#Err err) return #Err err;
 					case _ ();
 				};
 				if (max_comment_len > 0 and comment_len > max_comment_len) return #Err(#CommentTooLarge { current_size = comment_len; maximum_size = max_comment_len });
-				#None appealer;
+				#None account;
 			};
 			case _ return Error.text("ICRC-1 & ICRC-7 authorizations are not available");
 		};
 		// todo: put cleantrimmed comment
-		let appealed = Kay5.appeal(report, { arg with author = authorization; timestamp = Time64.nanos() });
+		let appealed = Kay5.appeal(report, { arg with appealer; timestamp = Time64.nanos() });
 		reports := RBTree.insert(reports, Nat.compare, arg.report_id, appealed);
 		#Ok;
 	};
 	public shared ({ caller }) func kay5_resolve(arg : Kay5.ResolveArg) : async Result.Type<(), Kay5.ResolveError> {
 		if (not Kay1.isAvailable(metadata)) return Error.text("Unavailable");
+		let report = switch (RBTree.get(reports, Nat.compare, arg.report_id)) {
+			case (?found) found;
+			case _ return #Err(#UnknownReport);
+		};
+		let (master, _) = switch (getMaster()) {
+			case (#Err err) return #Err err;
+			case (#Ok ok) ok;
+		};
+		if (caller != master) return Error.text("Only master canister can resolve the report");
+
+		let resolver = switch (arg.authorization) {
+			case (#None auth) #None { auth with owner = caller };
+			case _ return Error.text("ICRC-1, ICRC-2 & ICRC-7 authorizations are not available");
+		};
+		let resolved = Kay5.resolve(report, { arg with resolver; timestamp = Time64.nanos() });
+		reports := RBTree.insert(reports, Nat.compare, arg.report_id, resolved);
 		#Ok;
 	};
 
