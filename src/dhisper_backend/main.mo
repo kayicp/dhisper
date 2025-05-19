@@ -18,6 +18,8 @@ import Option "../util/motoko/Option";
 import Queue "../util/motoko/StableCollections/Queue";
 
 // todo: for dhisper, replace the post completely when deleting
+// todo: rename modifications
+// todo: combat sybil spam
 
 shared (install) actor class Canister(
   // deploy : {}
@@ -35,7 +37,7 @@ shared (install) actor class Canister(
     var metrics : Value.Metadata = RBTree.empty();
     metrics := Kay1.getMetrics(metrics, caller, logs, custodians);
     metrics := Kay2.getMetrics(metrics, RBTree.size(owners));
-    metrics := Kay3.getMetrics(metrics, files);
+    // metrics := Kay3.getMetrics(metrics, files); // todo: uncomment this
     metrics := Kay4.getMetrics(metrics, threads, posts);
     RBTree.array(metrics);
   };
@@ -58,47 +60,47 @@ shared (install) actor class Canister(
     RBTree.pageKey(owners, Kay2.compareIdentity, prev, _take);
   };
 
-  stable var files = RBTree.empty<Text, Kay3.File>();
+  // stable var files = RBTree.empty<Text, Kay3.File>();
 
-  public shared ({ caller }) func kay3_create(arg : Kay3.BatchCreateArg) : async Result.Type<(), Kay3.BatchCreateError> = async Error.text("'kay3_create' is not implemented yet");
+  // public shared ({ caller }) func kay3_create(arg : Kay3.BatchCreateArg) : async Result.Type<(), Kay3.BatchCreateError> = async Error.text("'kay3_create' is not implemented yet");
 
-  public shared ({ caller }) func kay3_modify(arg : Kay3.BatchModifyArg) : async Result.Type<(), Kay3.BatchModifyError> = async Error.text("'kay3_modify' is not implemented yet");
+  // public shared ({ caller }) func kay3_modify(arg : Kay3.BatchModifyArg) : async Result.Type<(), Kay3.BatchModifyError> = async Error.text("'kay3_modify' is not implemented yet");
 
-  public shared ({ caller }) func kay3_delete(arg : Kay3.BatchDeleteArg) : async Result.Type<(), Kay3.BatchDeleteError> = async Error.text("'kay3_delete' is not implemented yet");
+  // public shared ({ caller }) func kay3_delete(arg : Kay3.BatchDeleteArg) : async Result.Type<(), Kay3.BatchDeleteError> = async Error.text("'kay3_delete' is not implemented yet");
 
-  public shared query func kay3_files(by_owner : ?Kay2.Identity, prev : ?Text, take : ?Nat) : async [Text] = async [];
-  public shared query func kay3_versions_of(filenames : [Text]) : async [?Nat] = async [];
-  public shared query func kay3_name_versions_of(filename : Text, prev : ?Nat, take : ?Nat) : async [Nat] = async [];
-  public shared query func kay3_data_type_versions_of(filename : Text, prev : ?Nat, take : ?Nat) : async [Nat] = async [];
-  public shared query func kay3_owners_versions_of(filename : Text, prev : ?Nat, take : ?Nat) : async [Nat] = async [];
-  public shared query func kay3_metadata_versions_of(filename : Text, prev : ?Nat, take : ?Nat) : async [Nat] = async [];
-  public shared query func kay3_data_versions_of(filename : Text, prev : ?Nat, take : ?Nat) : async [Nat] = async [];
-  public shared query func kay3_size_versions_of(filename : Text, prev : ?Nat, take : ?Nat) : async [Nat] = async [];
-  public shared query func kay3_hashes_of(filenames : [Text]) : async [?Blob] = async [];
-  public shared query func kay3_authorizations_of(filenames : [Text]) : async [?Kay2.Authorized] = async [];
-  public shared query func kay3_authorizations_at(filevers : [Kay3.FileVersion]) : async [?Kay2.Authorized] = async [];
-  public shared query func kay3_timestamps_of(filenames : [Text]) : async [?Nat64] = async [];
-  public shared query func kay3_timestamps_at(filevers : [Kay3.FileVersion]) : async [?Nat64] = async [];
-  public shared query func kay3_parent_hashes_of(filenames : [Text]) : async [?Blob] = async [];
-  public shared query func kay3_parent_hashes_at(filevers : [Kay3.FileVersion]) : async [?Blob] = async [];
-  public shared query func kay3_names_modifications(filevers : [Kay3.FileVersion]) : async [?Text] = async [];
-  public shared query func kay3_names_at(filevers : [Kay3.FileVersion]) : async [?Text] = async [];
-  // public shared query func kay3_names_of(filenames : [Text]) : async [?Text] = async [];
-  public shared query func kay3_data_types_modifications(filevers : [Kay3.FileVersion]) : async [?Text] = async [];
-  public shared query func kay3_data_types_at(filevers : [Kay3.FileVersion]) : async [?Text] = async [];
-  public shared query func kay3_data_types_of(filenames : [Text]) : async [?Text] = async [];
-  public shared query func kay3_owners_modifications(filename : Text, version_id : Nat, prev : ?Kay2.Identity, take : ?Nat) : async [Kay2.Identity] = async [];
-  public shared query func kay3_owners_at(filename : Text, version_id : Nat, prev : ?Kay2.Identity, take : ?Nat) : async [Kay2.Identity] = async [];
-  public shared query func kay3_owners_of(filename : Text, prev : ?Kay2.Identity, take : ?Nat) : async [Kay2.Identity] = async [];
-  public shared query func kay3_metadata_modifications(filename : Text, version_id : Nat, prev : ?Kay2.Identity, take : ?Nat) : async [(Text, Value.Type)] = async [];
-  public shared query func kay3_metadata_at(filename : Text, version_id : Nat, prev : ?Kay2.Identity, take : ?Nat) : async [(Text, Value.Type)] = async [];
-  public shared query func kay3_metadata_of(filename : Text, prev : ?Kay2.Identity, take : ?Nat) : async [(Text, Value.Type)] = async [];
-  public shared query func kay3_data_modifications(filename : Text, version : Nat, prev : ?Nat, take : ?Nat) : async [(Nat, Blob)] = async [];
-  public shared query func kay3_data_at(filename : Text, version : Nat, prev : ?Nat, take : ?Nat) : async [(Nat, Blob)] = async [];
-  public shared query func kay3_data_of(filename : Text, prev : ?Nat, take : ?Nat) : async [(Nat, Blob)] = async [];
-  public shared query func kay3_sizes_modifications(filevers : [Kay3.FileVersion]) : async [?Nat] = async [];
-  public shared query func kay3_sizes_at(filevers : [Kay3.FileVersion]) : async [?Nat] = async [];
-  public shared query func kay3_sizes_of(filenames : [Text]) : async [?Nat] = async [];
+  // public shared query func kay3_files(by_owner : ?Kay2.Identity, prev : ?Text, take : ?Nat) : async [Text] = async [];
+  // public shared query func kay3_versions_of(filenames : [Text]) : async [?Nat] = async [];
+  // public shared query func kay3_name_versions_of(filename : Text, prev : ?Nat, take : ?Nat) : async [Nat] = async [];
+  // public shared query func kay3_data_type_versions_of(filename : Text, prev : ?Nat, take : ?Nat) : async [Nat] = async [];
+  // public shared query func kay3_owners_versions_of(filename : Text, prev : ?Nat, take : ?Nat) : async [Nat] = async [];
+  // public shared query func kay3_metadata_versions_of(filename : Text, prev : ?Nat, take : ?Nat) : async [Nat] = async [];
+  // public shared query func kay3_data_versions_of(filename : Text, prev : ?Nat, take : ?Nat) : async [Nat] = async [];
+  // public shared query func kay3_size_versions_of(filename : Text, prev : ?Nat, take : ?Nat) : async [Nat] = async [];
+  // public shared query func kay3_hashes_of(filenames : [Text]) : async [?Blob] = async [];
+  // public shared query func kay3_authorizations_of(filenames : [Text]) : async [?Kay2.Authorized] = async [];
+  // public shared query func kay3_authorizations_at(filevers : [Kay3.FileVersion]) : async [?Kay2.Authorized] = async [];
+  // public shared query func kay3_timestamps_of(filenames : [Text]) : async [?Nat64] = async [];
+  // public shared query func kay3_timestamps_at(filevers : [Kay3.FileVersion]) : async [?Nat64] = async [];
+  // public shared query func kay3_parent_hashes_of(filenames : [Text]) : async [?Blob] = async [];
+  // public shared query func kay3_parent_hashes_at(filevers : [Kay3.FileVersion]) : async [?Blob] = async [];
+  // public shared query func kay3_names_modifications(filevers : [Kay3.FileVersion]) : async [?Text] = async [];
+  // public shared query func kay3_names_at(filevers : [Kay3.FileVersion]) : async [?Text] = async [];
+  // // public shared query func kay3_names_of(filenames : [Text]) : async [?Text] = async [];
+  // public shared query func kay3_data_types_modifications(filevers : [Kay3.FileVersion]) : async [?Text] = async [];
+  // public shared query func kay3_data_types_at(filevers : [Kay3.FileVersion]) : async [?Text] = async [];
+  // public shared query func kay3_data_types_of(filenames : [Text]) : async [?Text] = async [];
+  // public shared query func kay3_owners_modifications(filename : Text, version_id : Nat, prev : ?Kay2.Identity, take : ?Nat) : async [Kay2.Identity] = async [];
+  // public shared query func kay3_owners_at(filename : Text, version_id : Nat, prev : ?Kay2.Identity, take : ?Nat) : async [Kay2.Identity] = async [];
+  // public shared query func kay3_owners_of(filename : Text, prev : ?Kay2.Identity, take : ?Nat) : async [Kay2.Identity] = async [];
+  // public shared query func kay3_metadata_modifications(filename : Text, version_id : Nat, prev : ?Kay2.Identity, take : ?Nat) : async [(Text, Value.Type)] = async [];
+  // public shared query func kay3_metadata_at(filename : Text, version_id : Nat, prev : ?Kay2.Identity, take : ?Nat) : async [(Text, Value.Type)] = async [];
+  // public shared query func kay3_metadata_of(filename : Text, prev : ?Kay2.Identity, take : ?Nat) : async [(Text, Value.Type)] = async [];
+  // public shared query func kay3_data_modifications(filename : Text, version : Nat, prev : ?Nat, take : ?Nat) : async [(Nat, Blob)] = async [];
+  // public shared query func kay3_data_at(filename : Text, version : Nat, prev : ?Nat, take : ?Nat) : async [(Nat, Blob)] = async [];
+  // public shared query func kay3_data_of(filename : Text, prev : ?Nat, take : ?Nat) : async [(Nat, Blob)] = async [];
+  // public shared query func kay3_sizes_modifications(filevers : [Kay3.FileVersion]) : async [?Nat] = async [];
+  // public shared query func kay3_sizes_at(filevers : [Kay3.FileVersion]) : async [?Nat] = async [];
+  // public shared query func kay3_sizes_of(filenames : [Text]) : async [?Nat] = async [];
 
   stable var threads = RBTree.empty<Nat, RBTree.RBTree<Nat, ()>>();
   stable var owners = RBTree.empty<Kay2.Identity, RBTree.RBTree<Nat, ()>>();

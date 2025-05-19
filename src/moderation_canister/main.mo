@@ -16,6 +16,7 @@ import Reputation_Main "../reputation_canister/main";
 import ICRC_1_Types "../util/motoko/ICRC-1/Types";
 import Time64 "../util/motoko/Time64";
 
+// todo: trim
 shared (install) actor class Canister(
 	// deploy : {}
 ) = Self {

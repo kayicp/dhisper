@@ -64,7 +64,7 @@ shared (install) actor class Canister(
 	public shared query func kay6_bottom(take : Nat) : async [Kay2.Identity] {
 		[];
 	};
-
+	// todo: trim
 	public shared ({ caller }) func kay6_increment(arg : Kay6.BatchIncrementArg) : async Result.Type<(), Kay6.BatchIncrementError> {
 		if (not Kay1.isAvailable(metadata)) return Error.text("Unavailable");
 
