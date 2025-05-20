@@ -97,10 +97,10 @@ shared (install) actor class Canister(
 	}) : async* Result.Type<(ICRC_1_Types.Actor, Nat), { #Unauthorized : Kay2.Unauthorized; #GenericError : Error.Type }> {
 		let commitment_standards = Value.getMap(metadata, Kay5.COMMITMENT_FEES, RBTree.empty());
 		let ICRC_2_KEY = "ICRC-2";
-		let icrc2_commitment_fees = Value.getPrincipalMap(commitment_standards, ICRC_2_KEY, RBTree.empty());
-		let fee_tree = switch (RBTree.get(icrc2_commitment_fees, Principal.compare, canister_id)) {
+		let icrc2_commitment_fee_rates = Value.getPrincipalMap(commitment_standards, ICRC_2_KEY, RBTree.empty());
+		let fee_tree = switch (RBTree.get(icrc2_commitment_fee_rates, Principal.compare, canister_id)) {
 			case (?#Map found) RBTree.fromArray(found, Text.compare);
-			case _ return #Err(#Unauthorized(#ICRC_2(#BadCanister { expected_canister_ids = RBTree.arrayKey(icrc2_commitment_fees) })));
+			case _ return #Err(#Unauthorized(#ICRC_2(#BadCanister { expected_canister_ids = RBTree.arrayKey(icrc2_commitment_fee_rates) })));
 		};
 		let token = ICRC_1_Types.genActor(canister_id);
 		let token_fee = await token.icrc1_fee();

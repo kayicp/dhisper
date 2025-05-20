@@ -16,21 +16,23 @@ module {
 	public let MAX_THREADS = "kay4:max_threads_size";
 	public let MAX_POSTS = "kay4:max_posts_per_thread";
 	public let MAX_CONTENT_SIZE = "kay4:max_content_size_per_post";
-	public let MAX_FILES = "kay4:max_files_per_post";
-	public let MAX_OWNERS = "kay4:max_owners_per_post";
-	public let MAX_META = "kay4:max_metadata_size_per_post";
+	// public let MAX_FILES = "kay4:max_files_per_post";
+	// public let MAX_OWNERS = "kay4:max_owners_per_post";
+	// public let MAX_META = "kay4:max_metadata_size_per_post";
 
 	public let FEE_COLLECTOR = "kay4:fee_collector";
+	public let CREATE_FEE_RATES = "kay4:create_fee_rates";
+	public let MIN_AMOUNT = "minimum_amount";
+	public let ADDITIONAL_AMOUNT = "additional_amount_numerator";
+	public let ADDITIONAL_BYTE = "additional_byte_denominator";
+
+	public let DELETE_FEE_RATES = "kay4:delete_fee_rates";
+
 	public let DEFAULT_TAKE = "kay4:default_take_value";
 	public let MAX_TAKE = "kay4:max_take_value";
 	public let MAX_QUERY_BATCH = "kay4:max_query_batch_size";
 
 	public let LOCKER = "kay4:locker";
-
-	public let CREATE_POST_FEES = "kay4:create_post_icrc2_fee_rates"; // = map of (canister_id, amount_numerator, byte_denominator)
-	public let DELETE_POST_FEES = "kay4:delete_post_icrc2_fee_rates"; // = map of (canister_id, amount_numerator, byte_denominator)
-	public let AMOUNT_NUMER = "amount_numerator";
-	public let BYTE_DENOM = "byte_denominator";
 
 	type Must = {
 		authorization : Kay2.Authorized;

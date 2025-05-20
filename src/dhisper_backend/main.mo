@@ -150,7 +150,37 @@ shared (install) actor class Canister(
     case (?found) Value.insert(metadata, Kay4.LOCKER, Kay2.identityValue(Kay2.lockerIdentity(found)));
     case _ Value.delete(metadata, Kay4.LOCKER);
   };
+  func getFee({
+    canister_id : Principal;
+    fee : ?Nat;
+    content_size : Nat;
+    content_max : Nat;
+    fee_key : Text;
+  }) : Result.Type<Nat, { #Unauthorized : Kay2.Unauthorized; #GenericError : Error.Type }> {
+    let fee_rates_standards = Value.getMap(metadata, fee_key, RBTree.empty());
+    let ICRC_2_KEY = "ICRC-2";
+    let icrc2_fee_rates = Value.getPrincipalMap(fee_rates_standards, ICRC_2_KEY, RBTree.empty());
+    let fee_tree = switch (RBTree.get(icrc2_fee_rates, Principal.compare, canister_id)) {
+      case (?#Map found) RBTree.fromArray(found, Text.compare);
+      case _ return #Err(#Unauthorized(#ICRC_2(#BadCanister { expected_canister_ids = RBTree.arrayKey(icrc2_fee_rates) })));
+    };
+    let minimum_amount = switch (Value.metaNat(fee_tree, Kay4.MIN_AMOUNT)) {
+      case (?found) found;
+      case _ return Error.text("Metadata `" # fee_key # "." # ICRC_2_KEY # "." # Kay4.MIN_AMOUNT # "` is missing");
+    };
+    let additional_amount = if (content_max > 0 and content_size > content_max) switch (Value.metaNat(fee_tree, Kay4.ADDITIONAL_AMOUNT), Value.metaNat(fee_tree, Kay4.ADDITIONAL_BYTE)) {
+      case (?amount_numer, ?byte_denom) if (amount_numer > 0 and byte_denom > 0) (content_size - content_max) * amount_numer / byte_denom else 0;
+      case _ 0;
+    } else 0;
+    let expected_fee = minimum_amount + additional_amount;
+    switch fee {
+      case (?defined_fee) if (defined_fee != expected_fee) return #Err(#Unauthorized(#ICRC_2(#BadFee { expected_fee })));
+      case _ ();
+    };
+    #Ok expected_fee;
+  };
 
+  // todo: error when replies reached max replies per thread
   public shared ({ caller }) func kay4_create(arg : Kay4.CreatePostArg) : async Result.Type<Nat, Kay4.CreatePostError> {
     var is_locker = false;
     try {
@@ -172,52 +202,42 @@ shared (install) actor class Canister(
       // todo: check locker
       let (authorization, owner) = switch (arg.authorization) {
         case (#None auth) (#None { auth with owner = caller }, #ICRC_1 { auth with owner = caller });
-        case (#ICRC_1 auth) {
-          let user = { owner = caller; subaccount = auth.subaccount };
-          if (Account.validate(user)) return Error.text("Invalid user account");
+        // todo: redo icrc-1 authorization
+        // case (#ICRC_1 auth) {
+        //   let user = { owner = caller; subaccount = auth.subaccount };
+        //   if (Account.validate(user)) return Error.text("Invalid caller account");
 
-          let token_minimums = Value.getPrincipalMap(metadata, Kay2.TOKEN_MINIMUMS, RBTree.empty());
-          let minimum_balance = switch (RBTree.get(token_minimums, Principal.compare, auth.canister_id)) {
-            case (?#Nat minimum) minimum;
-            case _ return #Err(#Unauthorized(#ICRC_1(#BadCanister { expected_canister_ids = RBTree.arrayKey(token_minimums) })));
-          };
-          let token = ICRC_1_Types.genActor(auth.canister_id);
-          lock(?{ arg with caller });
-          is_locker := true;
-          let current_balance = await token.icrc1_balance_of(user);
-          if (current_balance < minimum_balance) {
-            lock(null);
-            return #Err(#Unauthorized(#ICRC_1(#BalanceTooSmall { current_balance; minimum_balance })));
-          };
-          (#ICRC_1 { auth with owner = caller; minimum_balance }, #ICRC_1 user);
-        };
+        //   let token_minimums = Value.getPrincipalMap(metadata, Kay2.TOKEN_MINIMUMS, RBTree.empty());
+        //   let minimum_balance = switch (RBTree.get(token_minimums, Principal.compare, auth.canister_id)) {
+        //     case (?#Nat minimum) minimum;
+        //     case _ return #Err(#Unauthorized(#ICRC_1(#BadCanister { expected_canister_ids = RBTree.arrayKey(token_minimums) })));
+        //   };
+        //   let token = ICRC_1_Types.genActor(auth.canister_id);
+        //   lock(?{ arg with caller });
+        //   is_locker := true;
+        //   let current_balance = await token.icrc1_balance_of(user);
+        //   if (current_balance < minimum_balance) {
+        //     lock(null);
+        //     return #Err(#Unauthorized(#ICRC_1(#BalanceTooSmall { current_balance; minimum_balance })));
+        //   };
+        //   (#ICRC_1 { auth with owner = caller; minimum_balance }, #ICRC_1 user);
+        // };
         case (#ICRC_2 auth) {
           let user = { owner = caller; subaccount = auth.subaccount };
-          if (Account.validate(user)) return Error.text("Invalid user account");
-
-          let create_post_fees = Value.getPrincipalMap(metadata, Kay4.CREATE_POST_FEES, RBTree.empty());
-          let expected_fee = switch (RBTree.get(create_post_fees, Principal.compare, auth.canister_id)) {
-            case (?#Map config_map) {
-              let fee_info = RBTree.fromArray(config_map, Text.compare);
-              let amount_numer = Nat.max(Value.getNat(fee_info, Kay4.AMOUNT_NUMER, 1), 1);
-              let byte_denom = Nat.max(Value.getNat(fee_info, Kay4.BYTE_DENOM, 1), 1);
-              content_size * amount_numer / byte_denom;
-            };
-            case _ return #Err(#Unauthorized(#ICRC_2(#BadCanister { expected_canister_ids = RBTree.arrayKey(create_post_fees) })));
-          };
-          switch (auth.fee) {
-            case (?defined_fee) if (defined_fee != expected_fee) return #Err(#Unauthorized(#ICRC_2(#BadFee { expected_fee })));
-            case _ ();
+          if (Account.validate(user)) return Error.text("Invalid caller account");
+          let expected_fee = switch (getFee({ auth with content_size; content_max; fee_key = Kay4.CREATE_FEE_RATES })) {
+            case (#Ok ok) ok;
+            case (#Err err) return #Err err;
           };
           let token = ICRC_1_Types.genActor(auth.canister_id);
           let transfer_from_args = {
-            to = { owner = self(); subaccount = null };
-            fee = null;
-            spender_subaccount = null;
-            from = user;
-            memo = null;
-            created_at_time = null;
             amount = expected_fee;
+            from = user;
+            to = { owner = self(); subaccount = null };
+            spender_subaccount = null;
+            created_at_time = null;
+            memo = null;
+            fee = null;
           };
           lock(?{ arg with caller });
           is_locker := true;
@@ -230,7 +250,7 @@ shared (install) actor class Canister(
           };
           (#ICRC_2 { auth with owner = caller; xfer = transfer_from_id }, #ICRC_1 user);
         };
-        case _ return Error.text("ICRC-7 authorizations not implemented yet");
+        case _ return Error.text("ICRC-1 & ICRC-7 authorizations are not implemented yet");
       };
       lock(null);
 
@@ -261,7 +281,7 @@ shared (install) actor class Canister(
     };
   };
 
-  public shared ({ caller }) func kay4_modify(arg : Kay4.ModifyPostArg) : async Result.Type<(), Kay4.ModifyPostError> = async Error.text("'kay4_modify' is not implemented yet");
+  // public shared ({ caller }) func kay4_modify(arg : Kay4.ModifyPostArg) : async Result.Type<(), Kay4.ModifyPostError> = async Error.text("'kay4_modify' is not implemented yet");
 
   public shared ({ caller }) func kay4_delete(arg : Kay4.DeletePostArg) : async Result.Type<(), Kay4.DeletePostError> {
     var is_locker = false;
@@ -274,52 +294,43 @@ shared (install) actor class Canister(
       let post_owners = Kay4.getOwners(the_post);
       let authorization = switch (arg.authorization) {
         case (#None auth) (#None { auth with owner = caller });
-        case (#ICRC_1 auth) {
-          let user = { owner = caller; subaccount = auth.subaccount };
-          if (Account.validate(user)) return Error.text("Invalid user account");
+        // todo: rethink icrc1 delete
+        // case (#ICRC_1 auth) {
+        //   let user = { owner = caller; subaccount = auth.subaccount };
+        //   if (Account.validate(user)) return Error.text("Invalid caller account");
 
-          let token_minimums = Value.getPrincipalMap(metadata, Kay2.TOKEN_MINIMUMS, RBTree.empty());
-          let minimum_balance = switch (RBTree.get(token_minimums, Principal.compare, auth.canister_id)) {
-            case (?#Nat minimum) minimum;
-            case _ return #Err(#Unauthorized(#ICRC_1(#BadCanister { expected_canister_ids = RBTree.arrayKey(token_minimums) })));
-          };
-          let token = ICRC_1_Types.genActor(auth.canister_id);
-          lock(?{ arg with caller });
-          is_locker := true;
-          let current_balance = await token.icrc1_balance_of(user);
-          if (current_balance < minimum_balance) {
-            lock(null);
-            return #Err(#Unauthorized(#ICRC_1(#BalanceTooSmall { current_balance; minimum_balance })));
-          };
-          #ICRC_1 { auth with owner = caller; minimum_balance };
-        };
+        //   let token_minimums = Value.getPrincipalMap(metadata, Kay2.TOKEN_MINIMUMS, RBTree.empty());
+        //   let minimum_balance = switch (RBTree.get(token_minimums, Principal.compare, auth.canister_id)) {
+        //     case (?#Nat minimum) minimum;
+        //     case _ return #Err(#Unauthorized(#ICRC_1(#BadCanister { expected_canister_ids = RBTree.arrayKey(token_minimums) })));
+        //   };
+        //   let token = ICRC_1_Types.genActor(auth.canister_id);
+        //   lock(?{ arg with caller });
+        //   is_locker := true;
+        //   let current_balance = await token.icrc1_balance_of(user);
+        //   if (current_balance < minimum_balance) {
+        //     lock(null);
+        //     return #Err(#Unauthorized(#ICRC_1(#BalanceTooSmall { current_balance; minimum_balance })));
+        //   };
+        //   #ICRC_1 { auth with owner = caller; minimum_balance };
+        // };
         case (#ICRC_2 auth) {
           let user = { owner = caller; subaccount = auth.subaccount };
           if (not RBTree.has(post_owners, Kay2.compareIdentity, #ICRC_1 user)) return Error.text("Caller is not the owner of the post");
 
-          let delete_post_fees = Value.getPrincipalMap(metadata, Kay4.DELETE_POST_FEES, RBTree.empty());
-          let expected_fee = switch (RBTree.get(delete_post_fees, Principal.compare, auth.canister_id)) {
-            case (?#Map config_map) {
-              let fee_info = RBTree.fromArray(config_map, Text.compare);
-              let amount_numer = Nat.max(Value.getNat(fee_info, Kay4.AMOUNT_NUMER, 1), 1);
-              let byte_denom = Nat.max(Value.getNat(fee_info, Kay4.BYTE_DENOM, 1), 1);
-              Text.size(Option.fallback(Kay4.getContent(the_post), "")) * amount_numer / byte_denom;
-            };
-            case _ return #Err(#Unauthorized(#ICRC_2(#BadCanister { expected_canister_ids = RBTree.arrayKey(delete_post_fees) })));
-          };
-          switch (auth.fee) {
-            case (?defined_fee) if (defined_fee != expected_fee) return #Err(#Unauthorized(#ICRC_2(#BadFee { expected_fee })));
-            case _ ();
+          let expected_fee = switch (getFee({ auth with content_size = 0; content_max = 0; fee_key = Kay4.DELETE_FEE_RATES })) {
+            case (#Ok ok) ok;
+            case (#Err err) return #Err err;
           };
           let token = ICRC_1_Types.genActor(auth.canister_id);
           let transfer_from_args = {
-            to = { owner = self(); subaccount = null };
-            fee = null;
-            spender_subaccount = null;
-            from = user;
-            memo = null;
-            created_at_time = null;
             amount = expected_fee;
+            from = user;
+            to = { owner = self(); subaccount = null };
+            spender_subaccount = null;
+            created_at_time = null;
+            memo = null;
+            fee = null;
           };
           lock(?{ arg with caller });
           is_locker := true;
@@ -370,70 +381,70 @@ shared (install) actor class Canister(
       RBTree.pageKey(posts, Nat.compare, prev, _take);
     };
   };
-  public shared query func kay4_threads_of(post_ids : [Nat]) : async [?Nat] {
-    let batcher = Batcher.buffer<?Nat>(post_ids.size(), Value.metaNat(metadata, Kay4.MAX_QUERY_BATCH));
-    label looping for (id in post_ids.vals()) {
-      let result = switch (RBTree.get(posts, Nat.compare, id)) {
-        case (?found) found.thread;
-        case _ null;
-      };
-      batcher.add(result);
-      if (batcher.isFull()) break looping;
-    };
-    batcher.finalize();
-  };
-  public shared query func kay4_versions_of(post_ids : [Nat]) : async [?Nat] {
-    let batcher = Batcher.buffer<?Nat>(post_ids.size(), Value.metaNat(metadata, Kay4.MAX_QUERY_BATCH));
-    label looping for (id in post_ids.vals()) {
-      let result = switch (RBTree.get(posts, Nat.compare, id)) {
-        case (?found) ?RBTree.size(found.versions);
-        case _ null;
-      };
-      batcher.add(result);
-      if (batcher.isFull()) break looping;
-    };
-    batcher.finalize();
-  };
-  public shared query func kay4_content_versions_of(post_id : Nat, prev : ?Nat, take : ?Nat) : async [Nat] = async switch (RBTree.get(posts, Nat.compare, post_id)) {
-    case (?{ content_versions }) {
-      let _take = Pager.cleanTake(take, Value.metaNat(metadata, Kay4.MAX_TAKE), Value.metaNat(metadata, Kay4.DEFAULT_TAKE), RBTree.size(content_versions));
-      RBTree.pageKey(content_versions, Nat.compare, prev, _take);
-    };
-    case _ [];
-  };
-  public shared query func kay4_files_versions_of(post_id : Nat, prev : ?Nat, take : ?Nat) : async [Nat] = async switch (RBTree.get(posts, Nat.compare, post_id)) {
-    case (?{ files_versions }) {
-      let _take = Pager.cleanTake(take, Value.metaNat(metadata, Kay4.MAX_TAKE), Value.metaNat(metadata, Kay4.DEFAULT_TAKE), RBTree.size(files_versions));
-      RBTree.pageKey(files_versions, Nat.compare, prev, _take);
-    };
-    case _ [];
-  };
-  public shared query func kay4_owners_versions_of(post_id : Nat, prev : ?Nat, take : ?Nat) : async [Nat] = async switch (RBTree.get(posts, Nat.compare, post_id)) {
-    case (?{ owners_versions }) {
-      let _take = Pager.cleanTake(take, Value.metaNat(metadata, Kay4.MAX_TAKE), Value.metaNat(metadata, Kay4.DEFAULT_TAKE), RBTree.size(owners_versions));
-      RBTree.pageKey(owners_versions, Nat.compare, prev, _take);
-    };
-    case _ [];
-  };
-  public shared query func kay4_metadata_versions_of(post_id : Nat, prev : ?Nat, take : ?Nat) : async [Nat] = async switch (RBTree.get(posts, Nat.compare, post_id)) {
-    case (?{ metadata_versions }) {
-      let _take = Pager.cleanTake(take, Value.metaNat(metadata, Kay4.MAX_TAKE), Value.metaNat(metadata, Kay4.DEFAULT_TAKE), RBTree.size(metadata_versions));
-      RBTree.pageKey(metadata_versions, Nat.compare, prev, _take);
-    };
-    case _ [];
-  };
-  public shared query func kay4_hashes_of(post_ids : [Nat]) : async [?Blob] {
-    let batcher = Batcher.buffer<?Blob>(post_ids.size(), Value.metaNat(metadata, Kay4.MAX_QUERY_BATCH));
-    label looping for (id in post_ids.vals()) {
-      let result = switch (RBTree.get(posts, Nat.compare, id)) {
-        case (?found) ?found.hash;
-        case _ null;
-      };
-      batcher.add(result);
-      if (batcher.isFull()) break looping;
-    };
-    batcher.finalize();
-  };
+  // public shared query func kay4_threads_of(post_ids : [Nat]) : async [?Nat] {
+  //   let batcher = Batcher.buffer<?Nat>(post_ids.size(), Value.metaNat(metadata, Kay4.MAX_QUERY_BATCH));
+  //   label looping for (id in post_ids.vals()) {
+  //     let result = switch (RBTree.get(posts, Nat.compare, id)) {
+  //       case (?found) found.thread;
+  //       case _ null;
+  //     };
+  //     batcher.add(result);
+  //     if (batcher.isFull()) break looping;
+  //   };
+  //   batcher.finalize();
+  // };
+  // public shared query func kay4_versions_of(post_ids : [Nat]) : async [?Nat] {
+  //   let batcher = Batcher.buffer<?Nat>(post_ids.size(), Value.metaNat(metadata, Kay4.MAX_QUERY_BATCH));
+  //   label looping for (id in post_ids.vals()) {
+  //     let result = switch (RBTree.get(posts, Nat.compare, id)) {
+  //       case (?found) ?RBTree.size(found.versions);
+  //       case _ null;
+  //     };
+  //     batcher.add(result);
+  //     if (batcher.isFull()) break looping;
+  //   };
+  //   batcher.finalize();
+  // };
+  // public shared query func kay4_content_versions_of(post_id : Nat, prev : ?Nat, take : ?Nat) : async [Nat] = async switch (RBTree.get(posts, Nat.compare, post_id)) {
+  //   case (?{ content_versions }) {
+  //     let _take = Pager.cleanTake(take, Value.metaNat(metadata, Kay4.MAX_TAKE), Value.metaNat(metadata, Kay4.DEFAULT_TAKE), RBTree.size(content_versions));
+  //     RBTree.pageKey(content_versions, Nat.compare, prev, _take);
+  //   };
+  //   case _ [];
+  // };
+  // public shared query func kay4_files_versions_of(post_id : Nat, prev : ?Nat, take : ?Nat) : async [Nat] = async switch (RBTree.get(posts, Nat.compare, post_id)) {
+  //   case (?{ files_versions }) {
+  //     let _take = Pager.cleanTake(take, Value.metaNat(metadata, Kay4.MAX_TAKE), Value.metaNat(metadata, Kay4.DEFAULT_TAKE), RBTree.size(files_versions));
+  //     RBTree.pageKey(files_versions, Nat.compare, prev, _take);
+  //   };
+  //   case _ [];
+  // };
+  // public shared query func kay4_owners_versions_of(post_id : Nat, prev : ?Nat, take : ?Nat) : async [Nat] = async switch (RBTree.get(posts, Nat.compare, post_id)) {
+  //   case (?{ owners_versions }) {
+  //     let _take = Pager.cleanTake(take, Value.metaNat(metadata, Kay4.MAX_TAKE), Value.metaNat(metadata, Kay4.DEFAULT_TAKE), RBTree.size(owners_versions));
+  //     RBTree.pageKey(owners_versions, Nat.compare, prev, _take);
+  //   };
+  //   case _ [];
+  // };
+  // public shared query func kay4_metadata_versions_of(post_id : Nat, prev : ?Nat, take : ?Nat) : async [Nat] = async switch (RBTree.get(posts, Nat.compare, post_id)) {
+  //   case (?{ metadata_versions }) {
+  //     let _take = Pager.cleanTake(take, Value.metaNat(metadata, Kay4.MAX_TAKE), Value.metaNat(metadata, Kay4.DEFAULT_TAKE), RBTree.size(metadata_versions));
+  //     RBTree.pageKey(metadata_versions, Nat.compare, prev, _take);
+  //   };
+  //   case _ [];
+  // };
+  // public shared query func kay4_hashes_of(post_ids : [Nat]) : async [?Blob] {
+  //   let batcher = Batcher.buffer<?Blob>(post_ids.size(), Value.metaNat(metadata, Kay4.MAX_QUERY_BATCH));
+  //   label looping for (id in post_ids.vals()) {
+  //     let result = switch (RBTree.get(posts, Nat.compare, id)) {
+  //       case (?found) ?found.hash;
+  //       case _ null;
+  //     };
+  //     batcher.add(result);
+  //     if (batcher.isFull()) break looping;
+  //   };
+  //   batcher.finalize();
+  // };
 
   public shared query func kay4_authorizations_of(post_ids : [Nat]) : async [?Kay2.Authorized] = async Kay4.batchPostId(post_ids, posts, metadata, Kay4.getAuthorization);
   public shared query func kay4_authorizations_at(postvers : [Kay4.PostVersion]) : async [?Kay2.Authorized] = async Kay4.batchPostVersion(postvers, posts, metadata, #LastValue, Kay4.trackAuthorization);
@@ -441,30 +452,30 @@ shared (install) actor class Canister(
   public shared query func kay4_timestamps_of(post_ids : [Nat]) : async [?Nat64] = async Kay4.batchPostId(post_ids, posts, metadata, Kay4.getTimestamp);
   public shared query func kay4_timestamps_at(postvers : [Kay4.PostVersion]) : async [?Nat64] = async Kay4.batchPostVersion(postvers, posts, metadata, #LastValue, Kay4.trackTimestamp);
 
-  public shared query func kay4_parent_hashes_of(post_ids : [Nat]) : async [?Blob] = async Kay4.batchPostId(post_ids, posts, metadata, Kay4.getPhash);
-  public shared query func kay4_parent_hashes_at(postvers : [Kay4.PostVersion]) : async [?Blob] = async Kay4.batchPostVersion(postvers, posts, metadata, #LastValue, Kay4.trackPhash);
+  // public shared query func kay4_parent_hashes_of(post_ids : [Nat]) : async [?Blob] = async Kay4.batchPostId(post_ids, posts, metadata, Kay4.getPhash);
+  // public shared query func kay4_parent_hashes_at(postvers : [Kay4.PostVersion]) : async [?Blob] = async Kay4.batchPostVersion(postvers, posts, metadata, #LastValue, Kay4.trackPhash);
 
-  public shared query func kay4_contents_modifications(postvers : [Kay4.PostVersion]) : async [?Text] = async Kay4.batchPostVersion(postvers, posts, metadata, #Modification, Kay4.trackContent);
-  public shared query func kay4_contents_at(postvers : [Kay4.PostVersion]) : async [?Text] = async Kay4.batchPostVersion(postvers, posts, metadata, #LastValue, Kay4.trackContent);
+  // public shared query func kay4_contents_modifications(postvers : [Kay4.PostVersion]) : async [?Text] = async Kay4.batchPostVersion(postvers, posts, metadata, #Modification, Kay4.trackContent);
+  // public shared query func kay4_contents_at(postvers : [Kay4.PostVersion]) : async [?Text] = async Kay4.batchPostVersion(postvers, posts, metadata, #LastValue, Kay4.trackContent);
   public shared query func kay4_contents_of(post_ids : [Nat]) : async [?Text] = async Kay4.batchPostId(post_ids, posts, metadata, Kay4.getContent);
 
-  public shared query func kay4_files_modifications(post_id : Nat, version_id : Nat, prev : ?Text, take : ?Nat) : async [Text] = async switch (RBTree.get(posts, Nat.compare, post_id)) {
-    case (?found) Kay4.trackFiles(found, version_id, #Modification, prev, take, metadata);
-    case _ [];
-  };
-  public shared query func kay4_files_at(post_id : Nat, version_id : Nat, prev : ?Text, take : ?Nat) : async [Text] = async switch (RBTree.get(posts, Nat.compare, post_id)) {
-    case (?found) Kay4.trackFiles(found, version_id, #LastValue, prev, take, metadata);
-    case _ [];
-  };
-  public shared query func kay4_files_of(post_id : Nat, prev : ?Text, take : ?Nat) : async [Text] = async switch (RBTree.get(posts, Nat.compare, post_id)) {
-    case (?found) Kay4.getFiles(found, prev, take, metadata);
-    case _ [];
-  };
+  // public shared query func kay4_files_modifications(post_id : Nat, version_id : Nat, prev : ?Text, take : ?Nat) : async [Text] = async switch (RBTree.get(posts, Nat.compare, post_id)) {
+  //   case (?found) Kay4.trackFiles(found, version_id, #Modification, prev, take, metadata);
+  //   case _ [];
+  // };
+  // public shared query func kay4_files_at(post_id : Nat, version_id : Nat, prev : ?Text, take : ?Nat) : async [Text] = async switch (RBTree.get(posts, Nat.compare, post_id)) {
+  //   case (?found) Kay4.trackFiles(found, version_id, #LastValue, prev, take, metadata);
+  //   case _ [];
+  // };
+  // public shared query func kay4_files_of(post_id : Nat, prev : ?Text, take : ?Nat) : async [Text] = async switch (RBTree.get(posts, Nat.compare, post_id)) {
+  //   case (?found) Kay4.getFiles(found, prev, take, metadata);
+  //   case _ [];
+  // };
 
-  public shared query func kay4_owners_modifications(post_id : Nat, version_id : Nat, prev : ?Kay2.Identity, take : ?Nat) : async [Kay2.Identity] = async switch (RBTree.get(posts, Nat.compare, post_id)) {
-    case (?found) Kay4.trackOwners(found, version_id, #Modification, prev, take, metadata);
-    case _ [];
-  };
+  // public shared query func kay4_owners_modifications(post_id : Nat, version_id : Nat, prev : ?Kay2.Identity, take : ?Nat) : async [Kay2.Identity] = async switch (RBTree.get(posts, Nat.compare, post_id)) {
+  //   case (?found) Kay4.trackOwners(found, version_id, #Modification, prev, take, metadata);
+  //   case _ [];
+  // };
   public shared query func kay4_owners_at(post_id : Nat, version_id : Nat, prev : ?Kay2.Identity, take : ?Nat) : async [Kay2.Identity] = async switch (RBTree.get(posts, Nat.compare, post_id)) {
     case (?found) Kay4.trackOwners(found, version_id, #LastValue, prev, take, metadata);
     case _ [];
@@ -474,16 +485,16 @@ shared (install) actor class Canister(
     case _ [];
   };
 
-  public shared query func kay4_metadata_modifications(post_id : Nat, version_id : Nat, prev : ?Text, take : ?Nat) : async [(Text, Value.Type)] = async switch (RBTree.get(posts, Nat.compare, post_id)) {
-    case (?found) Kay4.trackPostMeta(found, version_id, #Modification, prev, take, metadata);
-    case _ [];
-  };
-  public shared query func kay4_metadata_at(post_id : Nat, version_id : Nat, prev : ?Text, take : ?Nat) : async [(Text, Value.Type)] = async switch (RBTree.get(posts, Nat.compare, post_id)) {
-    case (?found) Kay4.trackPostMeta(found, version_id, #LastValue, prev, take, metadata);
-    case _ [];
-  };
-  public shared query func kay4_metadata_of(post_id : Nat, prev : ?Text, take : ?Nat) : async [(Text, Value.Type)] = async switch (RBTree.get(posts, Nat.compare, post_id)) {
-    case (?found) Kay4.pagePostMeta(found, prev, take, metadata);
-    case _ [];
-  };
+  // public shared query func kay4_metadata_modifications(post_id : Nat, version_id : Nat, prev : ?Text, take : ?Nat) : async [(Text, Value.Type)] = async switch (RBTree.get(posts, Nat.compare, post_id)) {
+  //   case (?found) Kay4.trackPostMeta(found, version_id, #Modification, prev, take, metadata);
+  //   case _ [];
+  // };
+  // public shared query func kay4_metadata_at(post_id : Nat, version_id : Nat, prev : ?Text, take : ?Nat) : async [(Text, Value.Type)] = async switch (RBTree.get(posts, Nat.compare, post_id)) {
+  //   case (?found) Kay4.trackPostMeta(found, version_id, #LastValue, prev, take, metadata);
+  //   case _ [];
+  // };
+  // public shared query func kay4_metadata_of(post_id : Nat, prev : ?Text, take : ?Nat) : async [(Text, Value.Type)] = async switch (RBTree.get(posts, Nat.compare, post_id)) {
+  //   case (?found) Kay4.pagePostMeta(found, prev, take, metadata);
+  //   case _ [];
+  // };
 };

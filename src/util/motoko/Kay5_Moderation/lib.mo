@@ -6,8 +6,8 @@ import Nat64 "mo:base/Nat64";
 
 module {
 	public let MASTER = "kay5:master_canister_id";
-	public let MAX_COMMENT_SIZE = "kay5:max_comment_size";
-	public let COMMITMENT_FEES = "kay5:report_commitment_fees";
+	public let MAX_COMMENT_SIZE = "kay5:max_comment_size_per_status";
+	public let COMMITMENT_FEES = "kay5:report_commitment_fee_rates";
 	public let MIN_AMOUNT = "minimum_amount";
 	public let ADDITIONAL_AMOUNT = "additional_amount_numerator";
 	public let ADDITIONAL_BYTE = "additional_byte_denominator";
