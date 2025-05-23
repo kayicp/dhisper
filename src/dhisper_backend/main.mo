@@ -7,14 +7,12 @@ import Result "../util/motoko/Result";
 import Error "../util/motoko/Error";
 import Kay1 "../util/motoko/Kay1_Canister";
 import Kay2 "../util/motoko/Kay2_Authorization";
-import Kay3 "../util/motoko/Kay3_FileSystem";
+// import Kay3 "../util/motoko/Kay3_FileSystem";
 import Kay4 "../util/motoko/Kay4_PostSystem";
 import Account "../util/motoko/ICRC-1/Account";
 import ICRC_1_Types "../util/motoko/ICRC-1/Types";
 import Time64 "../util/motoko/Time64";
 import Pager "../util/motoko/Pager";
-import Batcher "../util/motoko/Batcher";
-import Option "../util/motoko/Option";
 import Queue "../util/motoko/StableCollections/Queue";
 
 // todo: for dhisper, replace the post completely when deleting
@@ -102,11 +100,30 @@ shared (install) actor class Canister(
   // public shared query func kay3_sizes_at(filevers : [Kay3.FileVersion]) : async [?Nat] = async [];
   // public shared query func kay3_sizes_of(filenames : [Text]) : async [?Nat] = async [];
 
+  // stable var processes = RBTree.empty<Nat, Kay3.Operation>();
+  // public shared query func kay3_processes(prev : ?Nat, take : ?Nat) : async [Nat] {
+  //   [];
+  // };
+
   stable var threads = RBTree.empty<Nat, RBTree.RBTree<Nat, ()>>();
   stable var owners = RBTree.empty<Kay2.Identity, RBTree.RBTree<Nat, ()>>();
   stable var posts : Kay4.Posts = RBTree.empty();
   stable var bumps = RBTree.empty<Nat, Nat>(); // PostId, ThreadId
   stable var post_id = 0;
+
+  public shared query func kay4_max_threads() : async ?Nat = async null;
+  public shared query func kay4_max_posts_per_thread() : async ?Nat = async null;
+  public shared query func kay4_max_content_size_per_post() : async ?Nat = async null;
+
+  public shared query func kay4_fee_collector() : async ?Principal = async null;
+  public shared query func kay4_create_fee_rates() : async [(Text, Value.Type)] = async [];
+  public shared query func kay4_delete_fee_rates() : async [(Text, Value.Type)] = async [];
+
+  public shared query func kay4_default_take_value() : async ?Nat = async null;
+  public shared query func kay4_max_take_value() : async ?Nat = async null;
+  public shared query func kay4_max_query_batch_size() : async ?Nat = async null;
+
+  // public shared query func kay4_locker
 
   // todo later: delete all files within each posts/thread
   func delete(postid : Nat) {

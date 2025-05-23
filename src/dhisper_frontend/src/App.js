@@ -1,5 +1,18 @@
 import { html, render } from 'lit-html';
-import { dhisper_backend } from 'declarations/dhisper_backend';
+import { dhisper_backend as dhisper_anon, createActor as genDhisper, canisterId as dhisper_id } from 'declarations/dhisper_backend';
+import { createActor as genToken } from 'declarations/icp_token';
+import { AuthClient } from "@dfinity/auth-client";
+import { HttpAgent } from '@dfinity/agent';
+
+let dhisper_user = null;
+let token_anon = null;
+let token_user = null;
+
+const network = process.env.DFX_NETWORK;
+const identityProvider =
+  network === 'ic'
+    ? 'https://identity.ic0.app' // Mainnet
+    : 'http://rdmx6-jaaaa-aaaaa-aaadq-cai.localhost:5000'; // Local
 
 BigInt.prototype.toJSON = function () {
   return this.toString();
@@ -58,6 +71,7 @@ class App {
     this.direction = null;
     this.isAnimating = false;
     this.isComposing = false;
+    this.isSelectingAuth = false;
     this.isSending = false;
     this.postContent = "";
     this.charCount = 0;
@@ -72,11 +86,16 @@ class App {
     this.commentCharCount = 0;
     this.commentAssetType = "None";
     this.commentSubaccount = "";
-    this.commentToken = "ICP";  
+    this.commentToken = "ICP";
 
     this.setupScrollHandler();
     this.renderPosts();
+    this.getMetadata();
     this.getPosts();
+  }
+
+  async getMetadata() {
+    
   }
 
   updateCharCount(e) {
@@ -99,7 +118,7 @@ class App {
     this.renderPosts();
 
     try {
-      const create_res = await dhisper_backend.kay4_create({
+      const create_res = await dhisper_anon.kay4_create({
         thread: [],
         content: this.postContent,
         files: [],
@@ -116,12 +135,12 @@ class App {
         let timestamp = '';
         await Promise.all([
           new Promise((resolve) => {(async () => {
-            const contents = await dhisper_backend.kay4_contents_of([id]);
+            const contents = await dhisper_anon.kay4_contents_of([id]);
             content = contents[0].length > 0? contents[0][0] : "";
             resolve();
           })()}),
           new Promise((resolve) => {(async () => {
-            const timestamps = await dhisper_backend.kay4_timestamps_of([id]);
+            const timestamps = await dhisper_anon.kay4_timestamps_of([id]);
             timestamp = timestamps[0].length > 0? new Date(Number(timestamps[0][0]) / 1000000) : null;
             resolve();
           })()}),
@@ -145,20 +164,20 @@ class App {
     let post_ids = [];
     if (this.posts.length > 0) {
       const last_post_id = this.posts[this.posts.length - 1].id;
-      post_ids = await dhisper_backend.kay4_threads([last_post_id], []); 
-    } else post_ids = await dhisper_backend.kay4_threads([], []);
+      post_ids = await dhisper_anon.kay4_threads([last_post_id], []); 
+    } else post_ids = await dhisper_anon.kay4_threads([], []);
 
     const posts = [];
     for (const id of post_ids) posts.push({ id });
     if (posts.length == 0) return;
     await Promise.all([
       new Promise((resolve) => {(async () => {
-        const contents = await dhisper_backend.kay4_contents_of(post_ids);
+        const contents = await dhisper_anon.kay4_contents_of(post_ids);
         for (const i in contents) posts[i]['content'] = contents[i].length > 0? contents[i][0] : "";
         resolve();
       })()}),
       new Promise((resolve) => {(async () => {
-        const timestamps = await dhisper_backend.kay4_timestamps_of(post_ids);
+        const timestamps = await dhisper_anon.kay4_timestamps_of(post_ids);
         for (const i in timestamps) posts[i]['timestamp'] = timestamps[i].length > 0? new Date(Number(timestamps[i][0]) / 1000000) : null;
         resolve();
       })()})
@@ -222,13 +241,13 @@ class App {
     while (true) {
       const last = replies.length - 1;
       const prev = replies.length == 0? [] : [replies[last].id];
-      const reply_ids = await dhisper_backend.kay4_replies_of(thread_id, prev, []);
+      const reply_ids = await dhisper_anon.kay4_replies_of(thread_id, prev, []);
       if (reply_ids.length == 0) break;
       for (const id of reply_ids) replies.push({ id });
       console.log({ replies });
       await Promise.all([
         new Promise((resolve) => {(async () => {
-          const contents = await dhisper_backend.kay4_contents_of(reply_ids);
+          const contents = await dhisper_anon.kay4_contents_of(reply_ids);
           for (const i in contents) {
             replies[content_count + +i]['content'] = contents[i].length > 0? contents[i][0] : "";
           };
@@ -236,7 +255,7 @@ class App {
           resolve();
         })()}),
         new Promise((resolve) => {(async () => {
-          const timestamps = await dhisper_backend.kay4_timestamps_of(reply_ids);
+          const timestamps = await dhisper_anon.kay4_timestamps_of(reply_ids);
           for (const i in timestamps) {
             replies[timestamp_count + +i]['timestamp'] = timestamps[i].length > 0? new Date(Number(timestamps[i][0]) / 1000000) : null;
           };
@@ -265,7 +284,7 @@ class App {
     this.commentInput = !this.commentInput ? "" : this.commentInput.trim();
     if (this.commentInput.length === 0) return;
 
-    const comment_res = await dhisper_backend.kay4_create({
+    const comment_res = await dhisper_anon.kay4_create({
       thread: [this.activeThread.id],
       content: this.commentInput,
       files: [],
@@ -281,12 +300,12 @@ class App {
       let timestamp = '';
       await Promise.all([
         new Promise((resolve) => {(async () => {
-          const contents = await dhisper_backend.kay4_contents_of([id]);
+          const contents = await dhisper_anon.kay4_contents_of([id]);
           content = contents[0].length > 0? contents[0][0] : "";
           resolve();
         })()}),
         new Promise((resolve) => {(async () => {
-          const timestamps = await dhisper_backend.kay4_timestamps_of([id]);
+          const timestamps = await dhisper_anon.kay4_timestamps_of([id]);
           timestamp = timestamps[0].length > 0? new Date(Number(timestamps[0][0]) / 1000000) : null;
           resolve();
         })()}),
@@ -298,6 +317,35 @@ class App {
       this.commentAssetType = 'None';
       this.renderPosts();
     }
+  }
+
+  selectAuth(e) {
+    e.preventDefault();
+    this.isSelectingAuth = true;
+    this.renderPosts();
+  }
+
+  async handleAuthenticated(authClient) {
+    const identity = await authClient.getIdentity();
+    console.log({ identity });
+    // todo: get all tokens and generate their actors
+    dhisper_user = genDhisper(dhisper_id, { agent: await HttpAgent.create({ identity }) });
+    this.isConnecting = false;
+    this.isSelectingAuth = false;
+    this.renderPosts();
+  }
+
+  async loginInternetIdentity(e) {
+    e.preventDefault();
+    this.isConnecting = true;
+    this.renderPosts();
+    const authClient = await AuthClient.create();
+    authClient.login({
+      // 7 days in nanoseconds
+      maxTimeToLive: BigInt(7 * 24 * 60 * 60 * 1000 * 1000 * 1000),
+      identityProvider,
+      onSuccess: async () => await this.handleAuthenticated(authClient),
+    });
   }
 
   renderPosts() {
@@ -340,18 +388,19 @@ class App {
         }}></div>`
       : null}
       <div class="compose-drawer ${this.isComposing ? 'open' : ''}">
-        <div>Create New Post</div>
-        <form @submit=${(e) => this.handleSubmit(e)}>
+        <div>Create New Thread</div>
+        <form @submit=${(e) => this.selectAuth(e)}>
           <label class="field">
-            <input type="text" maxlength="140" placeholder="What's on your mind?" 
+            <input type="text" placeholder="What's on your mind?" 
                   @input=${(e) => this.updateCharCount(e)} 
                   .value=${this.postContent || ''}
                   required />
-            <span class="char-count ${this.charCount >= 140 ? 'limit' : ''}">
-              ${this.charCount}/140
+            <span class="char-count ${this.charCount >= 256 ? 'limit' : ''}">
+              ${this.charCount}/256
             </span>
           </label>
 
+          <!-- 
           <label class="field">
             <select @change=${(e) => this.updateAssetType(e)} .value=${this.assetType}>
               <option value="None">None</option>
@@ -383,7 +432,26 @@ class App {
               ? html`<span class="spinner"></span> Sending...`
               : html`➤ Send`}
           </button>
+          -->
+          <button type="submit" class="send-btn">➤</button>
         </form>
+      </div>
+    `;
+    const auth = html`
+      ${this.isSelectingAuth
+      ? html`<div class="auth-backdrop" @click=${() => { 
+          this.isSelectingAuth = false; 
+          this.renderPosts(); 
+        }}></div>`
+      : null}
+      <div class="auth-drawer ${this.isSelectingAuth ? 'open' : ''}">
+        <div>Connect your wallet</div>
+
+        <button class="send-btn" ?disabled=${this.isConnecting} @click=${(e) => this.loginInternetIdentity(e)}>
+            ${this.isConnecting
+              ? html`<span class="spinner"></span> Connecting...`
+              : html`Internet Identity`}
+          </button>
       </div>
     `;
     console.log('comments:', this.threadComments);
@@ -443,7 +511,7 @@ class App {
               <input
                 type="text"
                 placeholder="Write your comment..."
-                maxlength="140"
+                maxlength="256"
                 .value=${this.commentInput}
                 @input=${(e) => {
                   this.commentInput = e.target.value;
@@ -451,8 +519,8 @@ class App {
                   this.renderPosts();
                 }}
               />
-              <div class="char-count ${this.commentCharCount >= 140 ? 'limit' : ''}">
-                ${this.commentCharCount}/140
+              <div class="char-count ${this.commentCharCount >= 256 ? 'limit' : ''}">
+                ${this.commentCharCount}/256
               </div>
             </div>
     
@@ -511,6 +579,7 @@ class App {
       <div class="post-wrapper">
         ${postLayers}
         ${drawer}
+        ${auth}
         <button class="create-post-btn" @click=${() => { 
           this.isComposing = true; 
           this.renderPosts();

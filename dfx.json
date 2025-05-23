@@ -3,6 +3,7 @@
     "internet_identity": {
       "candid": "https://github.com/dfinity/internet-identity/releases/latest/download/internet_identity.did",
       "frontend": {},
+      "specified_id": "rdmx6-jaaaa-aaaaa-aaadq-cai",
       "remote": {
         "id": {
           "ic": "rdmx6-jaaaa-aaaaa-aaadq-cai"
@@ -19,7 +20,7 @@
     },
     "dhisper_frontend": {
       "dependencies": [
-        "dhisper_backend"
+        "dhisper_backend", "internet_identity"
       ],
       "source": [
         "src/dhisper_frontend/dist"

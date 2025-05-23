@@ -1,6 +1,6 @@
 import Error "../Error";
-import Kay3 "../Kay3_FileSystem";
 import Kay2 "../Kay2_Authorization";
+import Kay3 "../Kay3_FileSystem";
 import Value "../Value";
 import Text "mo:base/Text";
 import Nat64 "mo:base/Nat64";
@@ -13,7 +13,7 @@ import Batcher "../Batcher";
 import Pager "../Pager";
 
 module {
-	public let MAX_THREADS = "kay4:max_threads_size";
+	public let MAX_THREADS = "kay4:max_threads";
 	public let MAX_POSTS = "kay4:max_posts_per_thread";
 	public let MAX_CONTENT_SIZE = "kay4:max_content_size_per_post";
 	// public let MAX_FILES = "kay4:max_files_per_post";
