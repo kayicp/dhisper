@@ -7,18 +7,19 @@ module {
 	public let DEFAULT_TAKE = "kay3:default_take_value";
 	public let MAX_TAKE = "kay3:max_take_value";
 	public let MAX_QUERY_BATCH = "kay3:max_query_batch_size";
-	public let FEE_COLLECTOR = "kay3:fee_collector";
+	public let FEE_COLLECTORS = "kay3:fee_collectors";
 
 	public let MAX_FILES = "kay3:max_files_size";
-	public let MAX_NAME = "kay3:max_filename_length";
+	public let MAX_NAME = "kay3:max_filename_size";
 	public let SUPPORTED_FILE_TYPES = "kay3:supported_file_types"; // = array of texts (image/jpeg, image/png, etc.)
 	public let MAX_OWNERS = "kay3:max_owners_per_file";
 	public let MAX_META = "kay3:max_metadata_size_per_file";
 	public let MAX_CHUNKS_SIZE = "kay3:max_chunks_size";
 	public let MAX_CHUNK_SIZE = "kay3:max_chunk_size";
 	public let MAX_FILE_SIZE = "kay3:max_file_size"; // number in bytes
-	public let MAX_FILES_PER_BATCH = "kay3:max_files_per_batch"; // number of max batch array size
+	public let MAX_FILES_BATCH_SIZE = "kay3:max_files_batch_size"; // number of max batch array size
 
+	// todo: redo this, follow kay4
 	public let CREATE_FEE = "kay3:create_file_icrc2_fee_rates"; // = map of (canister_id, amount_numerator, byte_denominator)
 	public let MODIFY_FEE = "kay3:modify_file_icrc2_fee_rates"; // = map of (canister_id, amount_numerator, byte_denominator)
 	public let DELETE_FEE = "kay3:delete_file_icrc2_fee_rates"; // = map of (canister_id, amount_numerator, byte_denominator)
@@ -54,7 +55,7 @@ module {
 	public type BatchCreateError = {
 		#DuplicateName : { index : Nat };
 		#UnsupportedFileType : { index : Nat; supported_file_types : [Text] };
-		#FilesTooMany : { maximum_files_per_batch : Nat };
+		#FilesTooMany : { maximum_files_batch_size : Nat };
 		#FileTooLarge : { index : Nat; current_size : Nat; maximum_size : Nat };
 		#Unauthorized : Kay2.Unauthorized;
 		#GenericError : Error.Type;
@@ -74,7 +75,7 @@ module {
 	public type BatchModifyError = {
 		#DuplicateNewName : { index : Nat };
 		#UnsupportedNewFileType : { index : Nat; supported_file_types : [Text] };
-		#FilesTooMany : { maximum_files_per_batch : Nat };
+		#FilesTooMany : { maximum_files_batch_size : Nat };
 		#FileTooLarge : { index : Nat; current_size : Nat; maximum_size : Nat };
 		#NotOwner : { index : Nat; owners : [Kay2.Identity] };
 		#Unauthorized : Kay2.Unauthorized;
@@ -87,7 +88,7 @@ module {
 	};
 	public type BatchDeleteError = {
 		#UnknownFilename : { index : Nat };
-		#FilesTooMany : { maximum_files_per_batch : Nat };
+		#FilesTooMany : { maximum_files_batch_size : Nat };
 		#NotOwner : { index : Nat; owners : [Kay2.Identity] };
 		#Unauthorized : Kay2.Unauthorized;
 		#GenericError : Error.Type;

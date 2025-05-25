@@ -13,8 +13,17 @@ module {
 	public let DEFAULT_TAKE = "kay2:default_take_value";
 	public let MAX_TAKE = "kay2:max_take_value";
 
-	public let TOKEN_MINIMUMS = "kay2:icrc1_balance_minimums"; // = map of (canister_id, minimum_balance must have)
-	public let NFT_CANISTERS = "kay2:icrc7_canister_ids";
+	public type Init = {
+		default_take_value : ?Nat;
+		max_take_value : ?Nat;
+	};
+
+	public func init(metadata : Value.Metadata, i : Init) : Value.Metadata {
+		var m = metadata;
+		m := Value.setNat(m, DEFAULT_TAKE, i.default_take_value);
+		m := Value.setNat(m, MAX_TAKE, i.max_take_value);
+		m;
+	};
 
 	type AnonProof = {
 		canister_id : Principal;
@@ -99,7 +108,7 @@ module {
 		};
 		switch owner {
 			case (#ICRC_1 o) {
-				register("identity_type", #Text "ICRC_1");
+				register("id_type", #Text "ICRC_1");
 				register("owner", #Principal(o.owner));
 				switch (o.subaccount) {
 					case (?found) register("subaccount", #Blob found);
@@ -118,7 +127,7 @@ module {
 		};
 		switch auth {
 			case (#ICRC_1 o) {
-				register("identity_type", #Text "ICRC_1");
+				register("id_type", #Text "ICRC_1");
 				register("owner", #Principal(o.owner));
 				switch (o.subaccount) {
 					case (?found) register("subaccount", #Blob found);
@@ -128,7 +137,7 @@ module {
 				register("minimum_balance", #Nat(o.minimum_balance));
 			};
 			case (#ICRC_7 o) {
-				register("identity_type", #Text "ICRC_7");
+				register("id_type", #Text "ICRC_7");
 				register("owner", #Principal(o.owner));
 				switch (o.subaccount) {
 					case (?found) register("subaccount", #Blob found);
@@ -138,7 +147,7 @@ module {
 				register("token_id", #Nat(o.token_id));
 			};
 			case (#ICRC_2 o) {
-				register("identity_type", #Text "ICRC_2");
+				register("id_type", #Text "ICRC_2");
 				register("owner", #Principal(o.owner));
 				switch (o.subaccount) {
 					case (?found) register("subaccount", #Blob found);
@@ -148,7 +157,7 @@ module {
 				register("xfer", #Nat(o.xfer));
 			};
 			case (#None o) {
-				register("identity_type", #Text "None");
+				register("id_type", #Text "None");
 				register("owner", #Principal(o.owner));
 				switch (o.subaccount) {
 					case (?found) register("subaccount", #Blob found);

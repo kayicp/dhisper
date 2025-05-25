@@ -4,6 +4,9 @@ import { createActor as genToken } from 'declarations/icp_token';
 import { AuthClient } from "@dfinity/auth-client";
 import { HttpAgent } from '@dfinity/agent';
 
+let internet_identity = null;
+let caller_principal = null;
+
 let dhisper_user = null;
 let token_anon = null;
 let token_user = null;
@@ -70,9 +73,13 @@ class App {
     this.nextIndex = null;
     this.direction = null;
     this.isAnimating = false;
-    this.isComposing = false;
-    this.isSelectingAuth = false;
-    this.isSending = false;
+    this.isComposingNewThread = false;
+    this.isCreatingNewThread = false;
+    this.isSelectingWallet = false;
+    this.isConnectingWallet = false;
+    this.isSelectingToken = false;
+    this.isRequireApproval = false;
+    this.isApproving = false;
     this.postContent = "";
     this.charCount = 0;
     this.assetType = "None";
@@ -90,12 +97,7 @@ class App {
 
     this.setupScrollHandler();
     this.renderPosts();
-    this.getMetadata();
     this.getPosts();
-  }
-
-  async getMetadata() {
-    
   }
 
   updateCharCount(e) {
@@ -114,7 +116,7 @@ class App {
     this.postContent = !this.postContent ? "" : this.postContent.trim();
     if (this.postContent.length === 0) return;
 
-    this.isSending = true;
+    this.isCreatingNewThread = true;
     this.renderPosts();
 
     try {
@@ -126,7 +128,7 @@ class App {
         metadata: [],
         authorization: { None: { subaccount: [] } },
       });
-      this.isSending = false;
+      this.isCreatingNewThread = false;
       if ('Err' in create_res) {
         alert(`Create post error: ${JSON.stringify(create_res.Err)}`);
       } else {
@@ -148,7 +150,7 @@ class App {
         this.posts = [{ id, content, timestamp }];
         
         this.currentIndex = 0;
-        this.isComposing = false;
+        this.isComposingNewThread = false;
         this.postContent = '';
         this.charCount = 0;
         this.assetType = 'None';
@@ -156,7 +158,7 @@ class App {
         this.startSlide(0, 'down');
       }
     } catch (e) {
-      this.isSending = false;
+      this.isCreatingNewThread = false;
     }
   }
 
@@ -189,7 +191,7 @@ class App {
   setupScrollHandler() {
     window.addEventListener('wheel', (e) => {
       if (this.isAnimating) return;
-      if (this.isComposing) return;
+      if (this.isComposingNewThread) return;
       if (this.isCommentOpen) return;
       if (this.isCommentFormOpen) return;
 
@@ -319,40 +321,61 @@ class App {
     }
   }
 
-  selectAuth(e) {
+  createNewThread(e) {
     e.preventDefault();
-    this.isSelectingAuth = true;
+    this.postContent = !this.postContent ? "" : this.postContent.trim();
+    if (this.postContent.length === 0) {
+      this.isCreatingNewThread = false;
+      this.renderPosts();
+      return;
+    };
+    this.isCreatingNewThread = true;
     this.renderPosts();
+    if (dhisper_user == null || caller_principal == null) {
+      return this.selectWallet(e);
+    }
+    // check for token approval
   }
 
-  async handleAuthenticated(authClient) {
-    const identity = await authClient.getIdentity();
-    console.log({ identity });
-    // todo: get all tokens and generate their actors
-    dhisper_user = genDhisper(dhisper_id, { agent: await HttpAgent.create({ identity }) });
-    this.isConnecting = false;
-    this.isSelectingAuth = false;
+  selectWallet(e) {
+    e.preventDefault();
+    this.isSelectingWallet = true;
     this.renderPosts();
   }
 
   async loginInternetIdentity(e) {
     e.preventDefault();
-    this.isConnecting = true;
+    this.isConnectingWallet = true;
     this.renderPosts();
-    const authClient = await AuthClient.create();
-    authClient.login({
+    if (internet_identity == null) internet_identity = await AuthClient.create();
+    internet_identity.login({
       // 7 days in nanoseconds
       maxTimeToLive: BigInt(7 * 24 * 60 * 60 * 1000 * 1000 * 1000),
       identityProvider,
-      onSuccess: async () => await this.handleAuthenticated(authClient),
+      onSuccess: async () => await this.handleAuthenticated(e),
     });
+  }
+
+  async handleAuthenticated(e) {
+    const identity = await internet_identity.getIdentity();
+    caller_principal = identity.getPrincipal();
+
+    console.log({ identity, caller_principal });
+    // todo: get all tokens and generate their actors
+    dhisper_user = genDhisper(dhisper_id, { agent: await HttpAgent.create({ identity }) });
+    this.isSelectingWallet = false;
+    this.isConnectingWallet = false;
+    
+    if (this.isCreatingNewThread) {
+      this.createNewThread(e);
+    };
   }
 
   renderPosts() {
     const currentPost = this.posts.length > 0? this.posts[this.currentIndex] : { content: 'Create the first post by clicking the "+" below!', timestamp: '' };
     const nextPost = this.nextIndex !== null ? this.posts[this.nextIndex] : null;
 
-    const postLayers = html`
+    const threads_pane = html`
       <div class="post-layer current ${this.direction === 'up' ? 'slide-out-up' : this.direction === 'down' ? 'slide-out-down' : ''}"
           style="background: ${this.background}">
         <div class="post-content-wrapper">
@@ -380,16 +403,20 @@ class App {
           `
         : null}
     `;
-    const drawer = html`
-      ${this.isComposing
+    const create_new_thread_btn = html`<button class="create-post-btn" @click=${() => { 
+      this.isComposingNewThread = true; 
+      this.renderPosts();
+    }}>+</button>`;
+    const create_new_thread_form = html`
+      ${this.isComposingNewThread
       ? html`<div class="backdrop" @click=${() => { 
-          this.isComposing = false; 
+          this.isComposingNewThread = false; 
           this.renderPosts(); 
         }}></div>`
       : null}
-      <div class="compose-drawer ${this.isComposing ? 'open' : ''}">
+      <div class="compose-drawer ${this.isComposingNewThread ? 'open' : ''}">
         <div>Create New Thread</div>
-        <form @submit=${(e) => this.selectAuth(e)}>
+        <form @submit=${(e) => this.createNewThread(e)}>
           <label class="field">
             <input type="text" placeholder="What's on your mind?" 
                   @input=${(e) => this.updateCharCount(e)} 
@@ -426,36 +453,34 @@ class App {
                 <div class="info">Fee: 0</div>
               `
             : null}
-
-          <button type="submit" class="send-btn" ?disabled=${this.isSending}>
-            ${this.isSending
+          -->
+            
+          <button type="submit" class="send-btn" ?disabled=${this.isCreatingNewThread}>
+            ${this.isCreatingNewThread
               ? html`<span class="spinner"></span> Sending...`
               : html`➤ Send`}
           </button>
-          -->
-          <button type="submit" class="send-btn">➤</button>
         </form>
       </div>
     `;
-    const auth = html`
-      ${this.isSelectingAuth
-      ? html`<div class="auth-backdrop" @click=${() => { 
-          this.isSelectingAuth = false; 
+    const wallet_selectors = html`
+      ${this.isSelectingWallet
+      ? html`<div class="wallet-backdrop" @click=${() => { 
+          this.isSelectingWallet = false; 
           this.renderPosts(); 
         }}></div>`
       : null}
-      <div class="auth-drawer ${this.isSelectingAuth ? 'open' : ''}">
+      <div class="wallet-drawer ${this.isSelectingWallet ? 'open' : ''}">
         <div>Connect your wallet</div>
 
-        <button class="send-btn" ?disabled=${this.isConnecting} @click=${(e) => this.loginInternetIdentity(e)}>
-            ${this.isConnecting
+        <button class="send-btn" ?disabled=${this.isConnectingWallet} @click=${(e) => this.loginInternetIdentity(e)}>
+            ${this.isConnectingWallet
               ? html`<span class="spinner"></span> Connecting...`
               : html`Internet Identity`}
           </button>
       </div>
     `;
-    console.log('comments:', this.threadComments);
-    const commentSection = this.posts.length > 0 && this.isCommentOpen && this.activeThread
+    const replies_pane = this.posts.length > 0 && this.isCommentOpen && this.activeThread
     ? html`
         <div class="comment-panel slide-in">
           <button class="close-btn" @click=${() => {
@@ -495,7 +520,7 @@ class App {
         </div>
       `
     : null;
-    const commentForm = commentSection && this.isCommentFormOpen
+    const add_reply_form = replies_pane && this.isCommentFormOpen
     ? html`
         <div
           class="comment-form-overlay"
@@ -575,17 +600,51 @@ class App {
         </div>
       ` : null;
 
+  //   const token_selectors = html`
+  //   ${this.isSelectingToken
+  //   ? html`<div class="token-backdrop" @click=${() => { 
+  //       this.isSelectingToken = false; 
+  //       this.renderPosts(); 
+  //     }}></div>`
+  //   : null}
+  //   <div class="token-drawer ${this.isSelectingToken ? 'open' : ''}">
+  //     <div>Select the token of your post</div>
+      
+  //     <button class="send-btn" ?disabled=${this.isConnectingWallet} @click=${(e) => this.loginInternetIdentity(e)}>
+  //         ${this.isConnectingWallet
+  //           ? html`<span class="spinner"></span> Sending...`
+  //           : html`Pay & Send`}
+  //       </button>
+  //   </div>
+  // `;
+    const token_approve_form = html`
+      ${this.isRequireApproval
+      ? html`<div class="approve-backdrop" @click=${() => { 
+          this.isRequireApproval = false; 
+          this.renderPosts();
+        }}></div>`
+      : null}
+      <div class="approve-drawer ${this.isRequireApproval ? 'open' : ''}">
+        <div>Select your token approval:</div>
+        
+        <button class="send-btn" ?disabled=${this.isApproving} @click=${(e) => this.approveToken(e)}>
+            ${this.isApproving
+              ? html`<span class="spinner"></span> Approving...`
+              : html`Confirm Approval`}
+          </button>
+      </div>
+    `;
     render(html`
       <div class="post-wrapper">
-        ${postLayers}
-        ${drawer}
-        ${auth}
-        <button class="create-post-btn" @click=${() => { 
-          this.isComposing = true; 
-          this.renderPosts();
-        }}>+</button>
-        ${commentSection}
-        ${commentForm}
+        ${threads_pane}
+        ${create_new_thread_btn}
+        ${create_new_thread_form}
+
+        ${replies_pane}
+        ${add_reply_form}
+        
+        ${wallet_selectors}
+        ${token_approve_form}
       </div>
     `, this.root);
   }

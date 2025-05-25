@@ -13,24 +13,98 @@ import Batcher "../Batcher";
 import Pager "../Pager";
 
 module {
-	public let MAX_THREADS = "kay4:max_threads";
-	public let MAX_POSTS = "kay4:max_posts_per_thread";
-	public let MAX_CONTENT_SIZE = "kay4:max_content_size_per_post";
-	// public let MAX_FILES = "kay4:max_files_per_post";
-	// public let MAX_OWNERS = "kay4:max_owners_per_post";
-	// public let MAX_META = "kay4:max_metadata_size_per_post";
+	public let MAX_THREADS = "kay4:max_threads_size";
+	public let MAX_REPLIES = "kay4:max_replies_size";
+	public let MAX_CONTENT = "kay4:max_content_size";
+	// public let MAX_FILES = "kay4:max_files";
+	// public let MAX_OWNERS = "kay4:max_owners_size";
+	// public let MAX_META = "kay4:max_metadata_size";
 
-	public let FEE_COLLECTOR = "kay4:fee_collector";
+	public let FEE_COLLECTORS = "kay4:fee_collectors";
 	public let CREATE_FEE_RATES = "kay4:create_fee_rates";
+	public let DELETE_FEE_RATES = "kay4:delete_fee_rates";
 	public let MIN_AMOUNT = "minimum_amount";
 	public let ADDITIONAL_AMOUNT = "additional_amount_numerator";
 	public let ADDITIONAL_BYTE = "additional_byte_denominator";
 
-	public let DELETE_FEE_RATES = "kay4:delete_fee_rates";
-
 	public let DEFAULT_TAKE = "kay4:default_take_value";
 	public let MAX_TAKE = "kay4:max_take_value";
 	public let MAX_QUERY_BATCH = "kay4:max_query_batch_size";
+
+	public type Init = {
+		max_threads_size : ?Nat;
+		max_replies_size : ?Nat;
+		max_content_size : ?Nat;
+
+		fee_collectors : [Principal];
+		create_fee_rates : [{
+			standard : Text;
+			assets : [{
+				canister_id : Principal;
+				minimum_amount : ?Nat;
+				additional : ?{ amount_numerator : Nat; byte_denominator : Nat };
+			}];
+		}];
+		delete_fee_rates : [{
+			standard : Text;
+			assets : [{
+				canister_id : Principal;
+				minimum_amount : ?Nat;
+			}];
+		}];
+
+		default_take_value : ?Nat;
+		max_take_value : ?Nat;
+		max_query_batch_size : ?Nat;
+	};
+
+	public func init(metadata : Value.Metadata, i : Init) : Value.Metadata {
+		var m = metadata;
+		m := Value.setNat(m, MAX_THREADS, i.max_threads_size);
+		m := Value.setNat(m, MAX_REPLIES, i.max_replies_size);
+		m := Value.setNat(m, MAX_CONTENT, i.max_content_size);
+
+		let fee_collectors = Buffer.Buffer<Value.Type>(i.fee_collectors.size());
+		for (p in i.fee_collectors.vals()) fee_collectors.add(#Principal p);
+		m := Value.setArray(m, FEE_COLLECTORS, Buffer.toArray(fee_collectors));
+
+		var create_fee_rates_standards : Value.Metadata = RBTree.empty();
+		for (fee_rate in i.create_fee_rates.vals()) {
+			var token_map = RBTree.empty<Value.Type, Value.Type>();
+			for (token in fee_rate.assets.vals()) {
+				var fee_map : Value.Metadata = RBTree.empty();
+				fee_map := Value.setNat(fee_map, MIN_AMOUNT, token.minimum_amount);
+				switch (token.additional) {
+					case (?defined) {
+						fee_map := Value.setNat(fee_map, ADDITIONAL_AMOUNT, ?defined.amount_numerator);
+						fee_map := Value.setNat(fee_map, ADDITIONAL_BYTE, ?defined.byte_denominator);
+					};
+					case _ ();
+				};
+				token_map := RBTree.insert(token_map, Value.compare, #Principal(token.canister_id), #Map(RBTree.array(fee_map)));
+			};
+			create_fee_rates_standards := Value.setValueMap(create_fee_rates_standards, fee_rate.standard, token_map);
+		};
+		m := Value.setMap(m, CREATE_FEE_RATES, create_fee_rates_standards);
+
+		var delete_fee_rates_standards : Value.Metadata = RBTree.empty();
+		for (fee_rate in i.delete_fee_rates.vals()) {
+			var token_map = RBTree.empty<Value.Type, Value.Type>();
+			for (token in fee_rate.assets.vals()) {
+				var fee_map : Value.Metadata = RBTree.empty();
+				fee_map := Value.setNat(fee_map, MIN_AMOUNT, token.minimum_amount);
+				token_map := RBTree.insert(token_map, Value.compare, #Principal(token.canister_id), #Map(RBTree.array(fee_map)));
+			};
+			delete_fee_rates_standards := Value.setValueMap(delete_fee_rates_standards, fee_rate.standard, token_map);
+		};
+		m := Value.setMap(m, DELETE_FEE_RATES, delete_fee_rates_standards);
+
+		m := Value.setNat(m, DEFAULT_TAKE, i.default_take_value);
+		m := Value.setNat(m, MAX_TAKE, i.max_take_value);
+		m := Value.setNat(m, MAX_QUERY_BATCH, i.max_query_batch_size);
+
+		m;
+	};
 
 	public let LOCKER = "kay4:locker";
 

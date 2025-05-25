@@ -14,13 +14,21 @@ import RBTree "../StableCollections/RedBlackTree/RBTree";
 
 module {
   public let AVAILABLE = "kay1:available";
-  public let MAX_LOGS = "kay1:max_logs";
+  public let MAX_LOGS = "kay1:max_logs_size";
   public let CUSTODIANS = "kay1:custodians";
 
   public type Init = {
     available : ?Bool;
-    max_logs : ?Nat;
+    max_logs_size : ?Nat;
     custodians : [Principal];
+  };
+
+  public func init(metadata : Value.Metadata, i : Init) : Value.Metadata {
+    var m = metadata;
+    m := Value.setBool(m, AVAILABLE, i.available);
+    m := Value.setNat(m, MAX_LOGS, i.max_logs_size);
+    m := Value.setPrincipals(m, CUSTODIANS, i.custodians);
+    m;
   };
 
   public type KeyValue = { key : Text; value : ?Value.Type };

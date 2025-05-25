@@ -188,7 +188,7 @@ html, body {
   // gap: 20px;
 }
 
-.auth-drawer {
+.wallet-drawer {
   position: fixed;
   bottom: -100%;
   left: 0;
@@ -199,7 +199,7 @@ html, body {
   border-top-right-radius: 20px;
   padding: 24px;
   box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.4);
-  z-index: 30;
+  z-index: 100;
   color: white;
   transition: bottom 0.4s ease;
   display: flex;
@@ -208,7 +208,55 @@ html, body {
   overflow-y: auto;
 }
 
-.auth-drawer.open {
+.wallet-drawer.open {
+  bottom: 0;
+}
+
+.token-drawer {
+  position: fixed;
+  bottom: -100%;
+  left: 0;
+  width: 100%;
+  // height: 75vh;
+  background: linear-gradient(to top, #1a1a1a, #2d2d2d);
+  border-top-left-radius: 20px;
+  border-top-right-radius: 20px;
+  padding: 24px;
+  box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.4);
+  z-index: 110;
+  color: white;
+  transition: bottom 0.4s ease;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  overflow-y: auto;
+}
+
+.token-drawer.open {
+  bottom: 0;
+}
+
+.approve-drawer {
+  position: fixed;
+  bottom: -100%;
+  left: 0;
+  width: 100%;
+  // height: 75vh;
+  background: linear-gradient(to top, #1a1a1a, #2d2d2d);
+  border-top-left-radius: 20px;
+  border-top-right-radius: 20px;
+  padding: 24px;
+  box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.4);
+  z-index: 120;
+  color: white;
+  transition: bottom 0.4s ease;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  overflow-y: auto;
+}
+
+.approve-drawer.open {
   bottom: 0;
 }
 
@@ -287,12 +335,30 @@ option {
   animation: fadeIn 0.3s ease forwards;
 }
 
-.auth-backdrop {
+.wallet-backdrop {
   position: fixed;
   inset: 0;
   background: rgba(0, 0, 0, 0.6);
   backdrop-filter: blur(2px);
-  z-index: 25;
+  z-index: 95;
+  animation: fadeIn 0.3s ease forwards;
+}
+
+.token-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(2px);
+  z-index: 105;
+  animation: fadeIn 0.3s ease forwards;
+}
+
+.approve-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(2px);
+  z-index: 115;
   animation: fadeIn 0.3s ease forwards;
 }
 

@@ -20,11 +20,40 @@ import Queue "../util/motoko/StableCollections/Queue";
 // todo: combat sybil spam
 
 shared (install) actor class Canister(
-  // deploy : {}
+  deploy : {
+    #Init : {
+      kay1 : Kay1.Init;
+      kay2 : Kay2.Init;
+      kay4 : Kay4.Init;
+    };
+    #Upgrade;
+  }
 ) = Self {
   func self() : Principal = Principal.fromActor(Self);
   stable var metadata : Value.Metadata = RBTree.empty();
   stable var logs = Queue.empty<Text>();
+  stable var threads = RBTree.empty<Nat, RBTree.RBTree<Nat, ()>>();
+  stable var owners = RBTree.empty<Kay2.Identity, RBTree.RBTree<Nat, ()>>();
+  stable var posts : Kay4.Posts = RBTree.empty();
+  stable var bumps = RBTree.empty<Nat, Nat>(); // PostId, ThreadId
+  stable var post_id = 0;
+
+  switch deploy {
+    case (#Init init) {
+      metadata := RBTree.empty();
+      logs := Queue.empty();
+      threads := RBTree.empty();
+      owners := RBTree.empty();
+      posts := RBTree.empty();
+      bumps := RBTree.empty();
+      post_id := 0;
+
+      metadata := Kay1.init(metadata, init.kay1);
+      metadata := Kay2.init(metadata, init.kay2);
+      metadata := Kay4.init(metadata, init.kay4);
+    };
+    case _ ();
+  };
 
   func log(t : Text) = logs := Kay1.log(logs, t);
   public shared query func kay1_logs() : async [Text] = async Queue.arrayTail(logs);
@@ -105,17 +134,11 @@ shared (install) actor class Canister(
   //   [];
   // };
 
-  stable var threads = RBTree.empty<Nat, RBTree.RBTree<Nat, ()>>();
-  stable var owners = RBTree.empty<Kay2.Identity, RBTree.RBTree<Nat, ()>>();
-  stable var posts : Kay4.Posts = RBTree.empty();
-  stable var bumps = RBTree.empty<Nat, Nat>(); // PostId, ThreadId
-  stable var post_id = 0;
-
   public shared query func kay4_max_threads() : async ?Nat = async null;
   public shared query func kay4_max_posts_per_thread() : async ?Nat = async null;
   public shared query func kay4_max_content_size_per_post() : async ?Nat = async null;
 
-  public shared query func kay4_fee_collector() : async ?Principal = async null;
+  public shared query func kay4_fee_collectors() : async [Principal] = async [];
   public shared query func kay4_create_fee_rates() : async [(Text, Value.Type)] = async [];
   public shared query func kay4_delete_fee_rates() : async [(Text, Value.Type)] = async [];
 
@@ -212,7 +235,7 @@ shared (install) actor class Canister(
       let content = Kay4.cleanText(arg.content);
       let content_size = Text.size(content);
       if (content_size == 0) return Error.text("Content cannot be empty");
-      let content_max = Value.getNat(metadata, Kay4.MAX_CONTENT_SIZE, 0);
+      let content_max = Value.getNat(metadata, Kay4.MAX_CONTENT, 0);
 
       if (arg.files.size() > 0) return Error.text("File system not implemented yet.");
       // todo later: implement file storing
