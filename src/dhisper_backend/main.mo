@@ -41,7 +41,7 @@ shared (install) actor class Canister(
   switch deploy {
     case (#Init init) {
       metadata := RBTree.empty();
-      logs := Queue.empty();
+      logs := Queue.empty(); // todo: redesign this to use tree
       threads := RBTree.empty();
       owners := RBTree.empty();
       posts := RBTree.empty();
@@ -134,17 +134,20 @@ shared (install) actor class Canister(
   //   [];
   // };
 
+  // todo: separate metadata by standards
+  public shared query func kay4_metadata() : async [(Text, Value.Type)] = async RBTree.array(metadata);
+
   public shared query func kay4_max_threads() : async ?Nat = async null;
   public shared query func kay4_max_posts_per_thread() : async ?Nat = async null;
   public shared query func kay4_max_content_size_per_post() : async ?Nat = async null;
 
   public shared query func kay4_fee_collectors() : async [Principal] = async [];
-  public shared query func kay4_create_fee_rates() : async [(Text, Value.Type)] = async [];
-  public shared query func kay4_delete_fee_rates() : async [(Text, Value.Type)] = async [];
+  public shared query func kay4_create_fee_rates() : async [(Text, Value.Type)] = async RBTree.array(Value.getMap(metadata, Kay4.CREATE_FEE_RATES, RBTree.empty()));
+  public shared query func kay4_delete_fee_rates() : async [(Text, Value.Type)] = async RBTree.array(Value.getMap(metadata, Kay4.DELETE_FEE_RATES, RBTree.empty()));
 
-  public shared query func kay4_default_take_value() : async ?Nat = async null;
-  public shared query func kay4_max_take_value() : async ?Nat = async null;
-  public shared query func kay4_max_query_batch_size() : async ?Nat = async null;
+  public shared query func kay4_default_take_value() : async ?Nat = async Value.metaNat(metadata, Kay4.DEFAULT_TAKE);
+  public shared query func kay4_max_take_value() : async ?Nat = async Value.metaNat(metadata, Kay4.MAX_TAKE);
+  public shared query func kay4_max_query_batch_size() : async ?Nat = async Value.metaNat(metadata, Kay4.MAX_QUERY_BATCH);
 
   // public shared query func kay4_locker
 

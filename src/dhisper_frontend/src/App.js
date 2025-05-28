@@ -21,6 +21,67 @@ BigInt.prototype.toJSON = function () {
   return this.toString();
 };
 
+/**
+ * @typedef {'Int'|'Nat'|'Blob'|'Bool'|'Text'|'Principal'|'Array'|'Map'|'ValueMap'} Variant
+ * @typedef {bigint|boolean|string|Uint8Array|number[]|Principal} Payload
+ * @typedef {{ [K in Variant]?: any }} Type
+ */
+
+/**
+ * Recursively converts your iced-typed value into a plain JS value.
+ * 
+ * - Int/Nat → number (via Number())
+ * - Bool/Text/Principal/Blob → raw payload
+ * - Array → JS array
+ * - Map → plain object with string keys
+ * - ValueMap → JS Map with arbitrary keys
+ * 
+ * @param {Type} typed 
+ * @returns {any}
+ */
+function convertTyped(typed) {
+  // find which variant this is
+  const [[variant, payload]] = Object.entries(typed);
+
+  switch (variant) {
+    case 'Int':
+    case 'Nat':
+      // if you really need JS numbers:
+      return Number(payload);
+      // or, to preserve bigints, just: return payload;
+
+    case 'Bool':
+    case 'Text':
+    case 'Principal':
+      return payload;
+
+    case 'Blob':
+      // pass through Uint8Array or number[]
+      return payload;
+
+    case 'Array':
+      // payload: Array<Type>
+      return payload.map(convertTyped);
+
+    case 'Map':
+      // payload: Array<[string, Type]>
+      return payload.reduce((obj, [key, val]) => {
+        obj[key] = convertTyped(val);
+        return obj;
+      }, {});
+
+    case 'ValueMap':
+      // payload: Array<[Type, Type]>
+      // we’ll return a JS Map so non-string keys are allowed
+      return new Map(
+        payload.map(([k, v]) => [ convertTyped(k), convertTyped(v) ])
+      );
+
+    default:
+      throw new Error(`Unknown variant ${variant}`);
+  }
+}
+
 const blob2hex = blob => Array.from(blob).map(byte => byte.toString(16).padStart(2, '0')).join('');
 Uint8Array.prototype.toJSON = function () {
   return blob2hex(this) // Array.from(this).toString();
@@ -359,9 +420,15 @@ class App {
   async handleAuthenticated(e) {
     const identity = await internet_identity.getIdentity();
     caller_principal = identity.getPrincipal();
+    console.log({ identity, caller: caller_principal.toText() });
 
-    console.log({ identity, caller_principal });
     // todo: get all tokens and generate their actors
+    const create_fee_rates = convertTyped({ Map : await dhisper_anon.kay4_create_fee_rates() });
+
+    const delete_fee_rates = convertTyped({ Map : await dhisper_anon.kay4_delete_fee_rates() });
+
+    console.log({ create_fee_rates, delete_fee_rates });
+
     dhisper_user = genDhisper(dhisper_id, { agent: await HttpAgent.create({ identity }) });
     this.isSelectingWallet = false;
     this.isConnectingWallet = false;
