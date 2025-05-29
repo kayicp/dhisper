@@ -22,7 +22,7 @@ dfx deploy icp_token --no-wallet --specified-id $TOKEN_ID --argument "(
 				owner = principal \"$DEFAULT_PRINCIPAL\";
 				subaccount = null;
 			};
-			transfer_fee = 1_000;
+			transfer_fee = 10_000;
 			metadata = vec {};
 			feature_flags = opt record { icrc2 = true };
 			initial_balances = vec {};

@@ -3,6 +3,7 @@ import { dhisper_backend as dhisper_anon, createActor as genDhisper, canisterId 
 import { createActor as genToken } from 'declarations/icp_token';
 import { AuthClient } from "@dfinity/auth-client";
 import { HttpAgent } from '@dfinity/agent';
+import { Principal } from '@dfinity/principal';
 
 let internet_identity = null;
 let caller_principal = null;
@@ -10,6 +11,15 @@ let caller_principal = null;
 let dhisper_user = null;
 let token_anon = null;
 let token_user = null;
+
+let create_fee_rates = null;
+let delete_fee_rates = null;
+let selected_create_fee_standard = null;
+let selected_create_token_canister = null;
+let selected_create_fee_rate = null;
+let selected_delete_fee_standard = null;
+let selected_delete_token_canister = null;
+let selected_delete_fee_rate = null;
 
 const network = process.env.DFX_NETWORK;
 const identityProvider =
@@ -125,6 +135,43 @@ function timeAgo(date) {
 
   const diffInYears = Math.floor(diffInMonths / 12);
   return rtf.format(-diffInYears, 'year');
+}
+
+async function prepareTokens() {
+  // todo: get all tokens and generate their actors
+  if (create_fee_rates == null || delete_fee_rates == null) {
+    await Promise.all([
+      new Promise((resolve) => {(async () => {
+        create_fee_rates = convertTyped({ Map : await dhisper_anon.kay4_create_fee_rates() });
+        const standards = Object.keys(create_fee_rates);
+        if (standards.length == 1) {
+          selected_create_fee_standard = standards[0];
+        }
+        const token_map = create_fee_rates[selected_create_fee_standard];
+        if (token_map.size == 1) {
+          const [token_canister_id] = token_map.keys();
+          selected_create_token_canister = token_canister_id;
+          selected_create_fee_rate = token_map.get(token_canister_id);
+        };
+        resolve();
+      })()}),
+      new Promise((resolve) => {(async () => {
+        delete_fee_rates = convertTyped({ Map : await dhisper_anon.kay4_delete_fee_rates() });
+        const standards = Object.keys(delete_fee_rates);
+        if (standards.length == 1) {
+          selected_delete_fee_standard = standards[0];
+        }
+        const token_map = delete_fee_rates[selected_delete_fee_standard];
+        if (token_map.size == 1) {
+          const [token_canister_id] = token_map.keys();
+          selected_delete_token_canister = token_canister_id;
+          selected_delete_fee_rate = token_map.get(token_canister_id);
+        };
+        resolve();
+      })()}),
+    ]);
+  };
+  console.log({ create_fee_rates, selected_create_fee_standard, selected_create_token_canister : selected_create_token_canister.toText(), selected_create_fee_rate, delete_fee_rates, selected_delete_fee_standard, selected_delete_token_canister : selected_delete_token_canister.toText(), selected_delete_fee_rate });
 }
 
 class App {
@@ -417,17 +464,14 @@ class App {
     });
   }
 
+  
+
   async handleAuthenticated(e) {
     const identity = await internet_identity.getIdentity();
     caller_principal = identity.getPrincipal();
     console.log({ identity, caller: caller_principal.toText() });
 
-    // todo: get all tokens and generate their actors
-    const create_fee_rates = convertTyped({ Map : await dhisper_anon.kay4_create_fee_rates() });
-
-    const delete_fee_rates = convertTyped({ Map : await dhisper_anon.kay4_delete_fee_rates() });
-
-    console.log({ create_fee_rates, delete_fee_rates });
+    await prepareTokens();
 
     dhisper_user = genDhisper(dhisper_id, { agent: await HttpAgent.create({ identity }) });
     this.isSelectingWallet = false;
