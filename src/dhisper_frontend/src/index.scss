@@ -236,7 +236,7 @@ html, body {
   bottom: 0;
 }
 
-.approve-drawer {
+.balance-drawer {
   position: fixed;
   bottom: -100%;
   left: 0;
@@ -256,7 +256,7 @@ html, body {
   overflow-y: auto;
 }
 
-.approve-drawer.open {
+.balance-drawer.open {
   bottom: 0;
 }
 
@@ -353,7 +353,7 @@ option {
   animation: fadeIn 0.3s ease forwards;
 }
 
-.approve-backdrop {
+.balance-backdrop {
   position: fixed;
   inset: 0;
   background: rgba(0, 0, 0, 0.6);
@@ -676,6 +676,43 @@ select:focus {
 .comment-close-btn:active {
   transform: scale(0.9);
   box-shadow: 0 0 5px rgba(255, 110, 196, 0.8);
+}
+
+.copy-btn {
+  position: relative;
+  padding: 8px 16px;
+  background-color: #007bff;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: background-color 0.3s;
+}
+
+.copy-btn:active {
+  background-color: #0056b3;
+}
+
+.copy-btn::after {
+  content: "Copied!";
+  position: absolute;
+  top: -25px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 12px;
+  color: #28a745;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s;
+}
+
+.copy-btn.copied::after {
+  opacity: 1;
+}
+
+.copy-btn.copied {
+  background-color: #28a745;
 }
 
 *,

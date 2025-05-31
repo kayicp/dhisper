@@ -4,9 +4,13 @@ import { createActor as genToken } from 'declarations/icp_token';
 import { AuthClient } from "@dfinity/auth-client";
 import { HttpAgent } from '@dfinity/agent';
 import { Principal } from '@dfinity/principal';
+import { AccountIdentifier } from '@dfinity/ledger-icp'
 
 let internet_identity = null;
 let caller_principal = null;
+let caller_principal_copied = false;
+let caller_account = '';
+let caller_account_copied = false;
 
 let dhisper_user = null;
 let token_anon = null;
@@ -14,12 +18,35 @@ let token_user = null;
 
 let create_fee_rates = null;
 let delete_fee_rates = null;
-let selected_create_fee_standard = null;
-let selected_create_token_canister = null;
+let selected_create_fee_token_standard = null;
+let selected_create_fee_token_canister = null;
 let selected_create_fee_rate = null;
 let selected_delete_fee_standard = null;
 let selected_delete_token_canister = null;
 let selected_delete_fee_rate = null;
+
+let is_waiting_balance = false;
+let view_token_details = false;
+let is_waiting_approval = false;
+let token_id = null;
+
+let token_balance = 0;
+let token_name = "";
+let token_symbol = "";
+let token_fee = 0;
+let token_power = 0;
+let token_total = { amount: 0, msg: ''};
+let token_details = [];
+let token_approval = null;
+let token_approval_insufficient = true;
+let token_approval_expired = true;
+let token_approval_total = null;
+
+let post_cost = 0;
+let base_cost = 0;
+let max_content_size = 0;
+let extra_chars = 0;
+let extra_cost = 0;
 
 const network = process.env.DFX_NETWORK;
 const identityProvider =
@@ -57,7 +84,8 @@ function convertTyped(typed) {
     case 'Int':
     case 'Nat':
       // if you really need JS numbers:
-      return Number(payload);
+      // return Number(payload);
+      return payload;
       // or, to preserve bigints, just: return payload;
 
     case 'Bool':
@@ -145,12 +173,12 @@ async function prepareTokens() {
         create_fee_rates = convertTyped({ Map : await dhisper_anon.kay4_create_fee_rates() });
         const standards = Object.keys(create_fee_rates);
         if (standards.length == 1) {
-          selected_create_fee_standard = standards[0];
+          selected_create_fee_token_standard = standards[0];
         }
-        const token_map = create_fee_rates[selected_create_fee_standard];
+        const token_map = create_fee_rates[selected_create_fee_token_standard];
         if (token_map.size == 1) {
           const [token_canister_id] = token_map.keys();
-          selected_create_token_canister = token_canister_id;
+          selected_create_fee_token_canister = token_canister_id;
           selected_create_fee_rate = token_map.get(token_canister_id);
         };
         resolve();
@@ -171,7 +199,11 @@ async function prepareTokens() {
       })()}),
     ]);
   };
-  console.log({ create_fee_rates, selected_create_fee_standard, selected_create_token_canister : selected_create_token_canister.toText(), selected_create_fee_rate, delete_fee_rates, selected_delete_fee_standard, selected_delete_token_canister : selected_delete_token_canister.toText(), selected_delete_fee_rate });
+  console.log({ 
+    // create_fee_rates, 
+    selected_create_fee_standard: selected_create_fee_token_standard, selected_create_token_canister : selected_create_fee_token_canister.toText(), selected_create_fee_rate, 
+    // delete_fee_rates, 
+    selected_delete_fee_standard, selected_delete_token_canister : selected_delete_token_canister.toText(), selected_delete_fee_rate });
 }
 
 class App {
@@ -429,20 +461,81 @@ class App {
     }
   }
 
-  createNewThread(e) {
+  async createNewThread(e) {
     e.preventDefault();
     this.postContent = !this.postContent ? "" : this.postContent.trim();
     if (this.postContent.length === 0) {
       this.isCreatingNewThread = false;
-      this.renderPosts();
-      return;
+      return this.renderPosts();
     };
     this.isCreatingNewThread = true;
     this.renderPosts();
     if (dhisper_user == null || caller_principal == null) {
       return this.selectWallet(e);
     }
-    // check for token approval
+    // check for token balance
+    if (selected_create_fee_token_standard == null) {
+      // return this.selectTokenStandard();
+    };
+    if (selected_create_fee_token_canister == null) {
+      // return this.selectTokenCanister();
+    };
+    token_anon = genToken(selected_create_fee_token_canister);
+    const token_fee_promise = token_anon.icrc1_fee();
+    const token_name_promise = token_anon.icrc1_name();
+    const token_symbol_promise = token_anon.icrc1_symbol();
+    const token_decimals_promise = token_anon.icrc1_decimals();
+    const max_content_size_promise = dhisper_anon.kay4_max_content_size();
+    const token_balance_promise = token_anon.icrc1_balance_of({ owner : caller_principal, subaccount : [] });
+    const token_approval_promise = token_anon.icrc2_allowance({
+      spender : { owner : Principal.fromText(dhisper_id), subaccount : [] },
+      account : { owner : caller_principal, subaccount : [] }
+    });
+
+    token_id = selected_create_fee_token_canister;
+    token_fee = Number(await token_fee_promise);
+    base_cost = Number(selected_create_fee_rate.minimum_amount);
+    max_content_size = Number(await max_content_size_promise);
+    extra_chars = this.postContent.length > max_content_size? (this.postContent.length - max_content_size) : 0;
+    extra_cost = extra_chars > 0? extra_chars * Number(selected_create_fee_rate.additional_amount_numerator) / Number(selected_create_fee_rate.additional_byte_denominator) : 0;
+    token_name = await token_name_promise;
+    token_symbol = await token_symbol_promise;
+    token_power = 10 ** Number(await token_decimals_promise);
+    token_balance = Number(await token_balance_promise);
+    token_approval = await token_approval_promise;
+
+    post_cost = base_cost + token_fee + extra_cost;
+    token_approval_insufficient = token_approval.allowance < post_cost; 
+    token_approval_expired = token_approval.expires_at.length > 0 && token_approval.expires_at[0] < (BigInt(Date.now()) * BigInt(1000000));
+    const require_approval = token_approval_insufficient || token_approval_expired;     
+    
+    const total_cost = require_approval? post_cost + token_fee : post_cost;
+    if (token_balance < total_cost) {
+      token_total = { amount: total_cost, msg: `Total cost to post: ${Number(total_cost) / token_power} ${token_symbol}` };
+      token_details = [
+        { amount: base_cost, msg: `Post creation fee: ${Number(base_cost) / token_power} ${token_symbol}`, submsg: `helps keep Dhisper spam-free & running smoothly`},
+        { amount: token_fee, msg: `Transfer fee: ${Number(token_fee) / token_power} ${token_symbol}`, submsg: `covers the network fee to send tokens`},
+        { amount: extra_cost, msg: `Extra characters fee: ${Number(extra_cost) / token_power} ${token_symbol}`, submsg: `you exceeded the ${max_content_size}-character limit; try trimming your text` },
+        { amount: require_approval ? token_fee : BigInt(0), msg: `Approval fee: ${Number(token_fee) / token_power} ${token_symbol}`, submsg: `Dhisper need to spend this to grant on-chain permission`}
+      ];
+      is_waiting_balance = true;
+      return this.renderPosts();
+    };
+    if (require_approval) {
+      token_approval_total = { amount : post_cost, msg: `Approve Dhisper to spend ${Number(post_cost) / token_power} ${token_symbol}` }
+      is_waiting_approval = true;
+      return this.renderPosts();
+    }
+    // call the create_post endpoint now that we have enough balance & approval
+
+    this.isCreatingNewThread = false;
+    return this.renderPosts();
+  }
+
+  viewTokenDetails(e) {
+    e.preventDefault();
+    view_token_details = true;
+    this.renderPosts();
   }
 
   selectWallet(e) {
@@ -464,12 +557,11 @@ class App {
     });
   }
 
-  
-
   async handleAuthenticated(e) {
     const identity = await internet_identity.getIdentity();
     caller_principal = identity.getPrincipal();
-    console.log({ identity, caller: caller_principal.toText() });
+    caller_account = AccountIdentifier.fromPrincipal({ principal: caller_principal }).toHex();
+    console.log({ identity, caller: caller_principal.toText(), caller_account });
 
     await prepareTokens();
 
@@ -745,6 +837,37 @@ class App {
           </button>
       </div>
     `;
+    const token_balance_waiter = html`${is_waiting_balance
+    ? html`<div class="balance-backdrop" @click=${() => { 
+        is_waiting_balance = false; 
+        this.renderPosts(); 
+      }}></div>`
+    : null}
+    <div class="balance-drawer ${is_waiting_balance ? 'open' : ''}">
+      <div>Not enough ${token_symbol} in your wallet</div>
+      <p>${token_total.msg}</p>
+      <button class="send-btn" @click=${(e) => this.viewTokenDetails(e)}>View details</button>
+      <p>Send ${(token_total.amount - token_balance) / token_power} ${token_symbol} to your ... </p>
+      <span>Principal: ${caller_principal? caller_principal.toText() : ''}<button class="copy-btn ${caller_principal_copied ? "copied" : ''}" @click=${async (e) => { 
+        e.preventDefault();
+        await navigator.clipboard.writeText(caller_principal.toText());
+        caller_principal_copied = true;
+        this.renderPosts(); 
+        setTimeout(() => {
+          caller_principal_copied = false;
+        }, 2000);
+      }}>${caller_principal_copied ? 'Copied' : 'Copy'}</button></span>
+      <span>or Account: ${caller_account}<button class="copy-btn ${caller_account_copied ? "copied" : ''}" @click=${async (e) => { 
+        e.preventDefault();
+        await navigator.clipboard.writeText(caller_account.toText());
+        caller_account_copied = true;
+        this.renderPosts(); 
+        setTimeout(() => {
+          caller_account_copied = false;
+        }, 2000);
+      }}>${caller_account_copied ? 'Copied' : 'Copy'}</button></span>
+    </div>
+`;
     render(html`
       <div class="post-wrapper">
         ${threads_pane}
@@ -755,6 +878,7 @@ class App {
         ${add_reply_form}
         
         ${wallet_selectors}
+        ${token_balance_waiter}
         ${token_approve_form}
       </div>
     `, this.root);
