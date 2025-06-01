@@ -137,11 +137,11 @@ shared (install) actor class Canister(
   // todo: separate metadata by standards
   public shared query func kay4_metadata() : async [(Text, Value.Type)] = async RBTree.array(metadata);
 
-  public shared query func kay4_max_threads_size() : async ?Nat = async null;
-  public shared query func kay4_max_replies_size() : async ?Nat = async null;
-  public shared query func kay4_max_content_size() : async ?Nat = async null;
+  public shared query func kay4_max_threads_size() : async ?Nat = async Value.metaNat(metadata, Kay4.MAX_THREADS);
+  public shared query func kay4_max_replies_size() : async ?Nat = async Value.metaNat(metadata, Kay4.MAX_REPLIES);
+  public shared query func kay4_max_content_size() : async ?Nat = async Value.metaNat(metadata, Kay4.MAX_CONTENT);
 
-  public shared query func kay4_fee_collectors() : async [Principal] = async [];
+  public shared query func kay4_fee_collectors() : async [Principal] = async RBTree.arrayKey(Value.getUniquePrincipals(metadata, Kay4.FEE_COLLECTORS, RBTree.empty()));
   public shared query func kay4_create_fee_rates() : async [(Text, Value.Type)] = async RBTree.array(Value.getMap(metadata, Kay4.CREATE_FEE_RATES, RBTree.empty()));
   public shared query func kay4_delete_fee_rates() : async [(Text, Value.Type)] = async RBTree.array(Value.getMap(metadata, Kay4.DELETE_FEE_RATES, RBTree.empty()));
 

@@ -9,8 +9,10 @@ import { AccountIdentifier } from '@dfinity/ledger-icp'
 let internet_identity = null;
 let caller_principal = null;
 let caller_principal_copied = false;
+let caller_principal_copy_failed = false;
 let caller_account = '';
 let caller_account_copied = false;
+let caller_account_copy_failed = false;
 
 let dhisper_user = null;
 let token_anon = null;
@@ -26,7 +28,7 @@ let selected_delete_token_canister = null;
 let selected_delete_fee_rate = null;
 
 let is_waiting_balance = false;
-let view_token_details = false;
+let is_viewing_token_details = false;
 let is_waiting_approval = false;
 let token_id = null;
 
@@ -498,6 +500,7 @@ class App {
     max_content_size = Number(await max_content_size_promise);
     extra_chars = this.postContent.length > max_content_size? (this.postContent.length - max_content_size) : 0;
     extra_cost = extra_chars > 0? extra_chars * Number(selected_create_fee_rate.additional_amount_numerator) / Number(selected_create_fee_rate.additional_byte_denominator) : 0;
+    console.log({ extra_chars, extra_cost, max_content_size });
     token_name = await token_name_promise;
     token_symbol = await token_symbol_promise;
     token_power = 10 ** Number(await token_decimals_promise);
@@ -514,9 +517,9 @@ class App {
       token_total = { amount: total_cost, msg: `Total cost to post: ${Number(total_cost) / token_power} ${token_symbol}` };
       token_details = [
         { amount: base_cost, msg: `Post creation fee: ${Number(base_cost) / token_power} ${token_symbol}`, submsg: `helps keep Dhisper spam-free & running smoothly`},
-        { amount: token_fee, msg: `Transfer fee: ${Number(token_fee) / token_power} ${token_symbol}`, submsg: `covers the network fee to send tokens`},
+        { amount: token_fee, msg: `Transfer fee: ${Number(token_fee) / token_power} ${token_symbol}`, submsg: `covers the fee to send ${token_symbol} tokens`},
         { amount: extra_cost, msg: `Extra characters fee: ${Number(extra_cost) / token_power} ${token_symbol}`, submsg: `you exceeded the ${max_content_size}-character limit; try trimming your text` },
-        { amount: require_approval ? token_fee : BigInt(0), msg: `Approval fee: ${Number(token_fee) / token_power} ${token_symbol}`, submsg: `Dhisper need to spend this to grant on-chain permission`}
+        { amount: require_approval ? token_fee : BigInt(0), msg: `Approval fee: ${Number(token_fee) / token_power} ${token_symbol}`, submsg: `covers the fee to approve Dhisper to spend your ${token_symbol} tokens`}
       ];
       is_waiting_balance = true;
       return this.renderPosts();
@@ -534,7 +537,7 @@ class App {
 
   viewTokenDetails(e) {
     e.preventDefault();
-    view_token_details = true;
+    is_viewing_token_details = true;
     this.renderPosts();
   }
 
@@ -848,26 +851,70 @@ class App {
       <p>${token_total.msg}</p>
       <button class="send-btn" @click=${(e) => this.viewTokenDetails(e)}>View details</button>
       <p>Send ${(token_total.amount - token_balance) / token_power} ${token_symbol} to your ... </p>
-      <span>Principal: ${caller_principal? caller_principal.toText() : ''}<button class="copy-btn ${caller_principal_copied ? "copied" : ''}" @click=${async (e) => { 
+      <span><label>Principal: </label><button class="copy-btn ${caller_principal_copied ? "copied" : caller_principal_copy_failed ? 'copy-failed' : ''}" @click=${async (e) => { 
         e.preventDefault();
-        await navigator.clipboard.writeText(caller_principal.toText());
-        caller_principal_copied = true;
+        try {
+          await navigator.clipboard.writeText(caller_principal.toText());
+          caller_principal_copied = true;
+        } catch (e) {
+          console.error('copy principal', e);
+          const to_copy = document.getElementById("caller_principal_text");
+          to_copy.select();
+          if (document.execCommand('copy')) {
+            caller_principal_copied = true;
+          } else caller_principal_copy_failed = true;
+          to_copy.setSelectionRange(0, 0);
+        }        
         this.renderPosts(); 
         setTimeout(() => {
           caller_principal_copied = false;
+          this.renderPosts();
         }, 2000);
-      }}>${caller_principal_copied ? 'Copied' : 'Copy'}</button></span>
-      <span>or Account: ${caller_account}<button class="copy-btn ${caller_account_copied ? "copied" : ''}" @click=${async (e) => { 
+      }}>${caller_principal_copied ? 'Copied' : caller_principal_copy_failed ? 'Failed' : 'Copy'}</button></span>
+      <pre>${caller_principal? caller_principal.toText() : ''}</pre>
+      <textarea id="caller_principal_text" class="copy-only">${caller_principal? caller_principal.toText() : ''}</textarea>
+      <span><label>or Account: </label><button class="copy-btn ${caller_account_copied ? "copied" : caller_account_copy_failed? 'copy-failed' : ''}" @click=${async (e) => { 
         e.preventDefault();
-        await navigator.clipboard.writeText(caller_account.toText());
-        caller_account_copied = true;
+        try {
+          await navigator.clipboard.writeText(caller_account);
+          caller_account_copied = true;
+        } catch (e) {
+          console.error('copy account', e);
+          const to_copy = document.getElementById("caller_account_text");
+          to_copy.select();
+          if (document.execCommand('copy')) {
+            caller_account_copied = true;
+          } else caller_account_copy_failed = true;
+          to_copy.setSelectionRange(0, 0);
+        }        
         this.renderPosts(); 
         setTimeout(() => {
           caller_account_copied = false;
+          caller_account_copy_failed = false;
+          this.renderPosts();
         }, 2000);
-      }}>${caller_account_copied ? 'Copied' : 'Copy'}</button></span>
+      }}>${caller_account_copied ? 'Copied' : caller_account_copy_failed ? 'Failed' : 'Copy'}</button></span>
+      <pre>${caller_account}</pre>
+      <textarea id="caller_account_text" class="copy-only">${caller_account}</textarea>
+      
     </div>
 `;
+    const token_balance_waiter_details = html`
+    ${is_viewing_token_details
+    ? html`<div class="cost-breakdown-backdrop" @click=${() => { 
+        is_viewing_token_details = false; 
+        this.renderPosts(); 
+      }}></div>`
+    : null}
+    <div class="cost-breakdown-drawer ${is_viewing_token_details ? 'open' : ''}">
+      ${token_details.map((detail, detail_index) => {
+          return detail.amount > 0? html`
+          <label> + ${detail.msg}</label>
+          <pre>${detail.submsg}</pre>` : null
+        })}
+      <label> = ${token_total.msg}</label>
+    </div>
+  `;
     render(html`
       <div class="post-wrapper">
         ${threads_pane}
@@ -879,6 +926,7 @@ class App {
         
         ${wallet_selectors}
         ${token_balance_waiter}
+        ${token_balance_waiter_details}
         ${token_approve_form}
       </div>
     `, this.root);
