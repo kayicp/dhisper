@@ -641,8 +641,8 @@ class App {
 
         <button class="send-btn" ?disabled=${this.isCreatingNewThread} @click=${(e) => this.createNewThread(e)}>
           ${this.isCreatingNewThread
-            ? html`<span class="spinner"></span> Sending...`
-            : html`➤ Send`}
+            ? html`<span class="spinner"></span> Posting...`
+            : html`➤ Post`}
         </button>
       </div>
     `;
@@ -805,7 +805,8 @@ class App {
       const cost_and_reasons = html`
       ${is_seeing_cost
       ? html`<div class="cost-backdrop" @click=${() => { 
-          is_seeing_cost = false; 
+          is_seeing_cost = false;
+          this.isCreatingNewThread = false;
           this.renderPosts(); 
         }}></div>`
       : null}
@@ -832,7 +833,9 @@ class App {
           <br>
           <small><small>Post now & lock in your spot for token rewards!</small></small>
         </p>
-        <button class="send-btn">Post</button>
+        <button class="send-btn" @click=${(e) => {
+          this.createNewThread(e);
+        }}>Pay</button>
       </div>
     `;
     const token_approve_form = html`
@@ -852,6 +855,7 @@ class App {
           </button>
       </div>
     `;
+    // todo: ask ai to think if casual users are okay with this
     const token_balance_waiter = html`${is_waiting_balance
     ? html`<div class="balance-backdrop" @click=${() => { 
         is_waiting_balance = false; 
@@ -859,60 +863,66 @@ class App {
       }}></div>`
     : null}
     <div class="balance-drawer ${is_waiting_balance ? 'open' : ''}">
-      <h3>Not enough ${token_symbol} in your wallet</h3>
-      <span>
-        <label>${token_total.msg}</label>
-        <button class="copy-btn" @click=${(e) => this.viewTokenDetails(e)}>View details</button>
-      </span>
-      <hr>
-      <div>You need to send ${(token_total.amount - token_balance) / token_power} ${token_symbol} into your ... </div>
-      <span><label>Principal: </label><button class="copy-btn ${caller_principal_copied ? "copied" : caller_principal_copy_failed ? 'copy-failed' : ''}" @click=${async (e) => { 
-        e.preventDefault();
-        try {
-          await navigator.clipboard.writeText(caller_principal.toText());
-          caller_principal_copied = true;
-        } catch (e) {
-          console.error('copy principal', e);
-          const to_copy = document.getElementById("caller_principal_text");
-          to_copy.select();
-          if (document.execCommand('copy')) {
+      <p>
+        <strong>Not enough ${token_symbol} in your wallet</strong><br>
+        <br><small>${token_total.msg}</small>
+        <br><small>Your balance: ${token_balance / token_power} ${token_symbol}</small>
+        <br>
+        <br>You need to <strong>send ${(token_total.amount - token_balance) / token_power} ${token_symbol}</strong> into your ...<br>
+        <br>... <strong>Principal</strong>: <button class="copy-btn ${caller_principal_copied ? "copied" : caller_principal_copy_failed ? 'copy-failed' : ''}" @click=${async (e) => { 
+          e.preventDefault();
+          try {
+            await navigator.clipboard.writeText(caller_principal.toText());
             caller_principal_copied = true;
-          } else caller_principal_copy_failed = true;
-          to_copy.setSelectionRange(0, 0);
-        }        
-        this.renderPosts(); 
-        setTimeout(() => {
-          caller_principal_copied = false;
-          this.renderPosts();
-        }, 2000);
-      }}>${caller_principal_copied ? 'Copied' : caller_principal_copy_failed ? 'Failed' : 'Copy'}</button></span>
-      <pre>${caller_principal? caller_principal.toText() : ''}</pre>
-      <textarea id="caller_principal_text" class="copy-only">${caller_principal? caller_principal.toText() : ''}</textarea>
-      <span><label>or Account: </label><button class="copy-btn ${caller_account_copied ? "copied" : caller_account_copy_failed? 'copy-failed' : ''}" @click=${async (e) => { 
-        e.preventDefault();
-        try {
-          await navigator.clipboard.writeText(caller_account);
-          caller_account_copied = true;
-        } catch (e) {
-          console.error('copy account', e);
-          const to_copy = document.getElementById("caller_account_text");
-          to_copy.select();
-          if (document.execCommand('copy')) {
+          } catch (e) {
+            console.error('copy principal', e);
+            const to_copy = document.getElementById("caller_principal_text");
+            to_copy.disabled = false;
+            to_copy.select();
+            if (document.execCommand('copy')) {
+              caller_principal_copied = true;
+            } else caller_principal_copy_failed = true;
+            to_copy.setSelectionRange(0, 0);
+            to_copy.disabled = true;
+          }        
+          this.renderPosts(); 
+          setTimeout(() => {
+            caller_principal_copied = false;
+            this.renderPosts();
+          }, 2000);
+        }}>${caller_principal_copied ? 'Copied' : caller_principal_copy_failed ? 'Failed' : 'Copy'}</button>
+        <br>
+        <small><small><code>${caller_principal? caller_principal.toText() : ''}</code></small></small>
+        <textarea id="caller_principal_text" class="copy-only" disabled>${caller_principal? caller_principal.toText() : ''}</textarea>
+        <br>
+        <br>... or <strong>Account</strong>: <button class="copy-btn ${caller_account_copied ? "copied" : caller_account_copy_failed? 'copy-failed' : ''}" @click=${async (e) => { 
+          e.preventDefault();
+          try {
+            await navigator.clipboard.writeText(caller_account);
             caller_account_copied = true;
-          } else caller_account_copy_failed = true;
-          to_copy.setSelectionRange(0, 0);
-        }        
-        this.renderPosts(); 
-        setTimeout(() => {
-          caller_account_copied = false;
-          caller_account_copy_failed = false;
-          this.renderPosts();
-        }, 2000);
-      }}>${caller_account_copied ? 'Copied' : caller_account_copy_failed ? 'Failed' : 'Copy'}</button></span>
-      <pre>${caller_account}</pre>
-      <textarea id="caller_account_text" class="copy-only">${caller_account}</textarea>
-      <hr>
-      <div>Take your time, we will wait while you send the ${token_symbol} to any of the addresses above</div>
+          } catch (e) {
+            console.error('copy account', e);
+            const to_copy = document.getElementById("caller_account_text");
+            to_copy.disabled = false;
+            to_copy.select();
+            if (document.execCommand('copy')) {
+              caller_account_copied = true;
+            } else caller_account_copy_failed = true;
+            to_copy.setSelectionRange(0, 0);
+            to_copy.disabled = true;
+          }        
+          this.renderPosts(); 
+          setTimeout(() => {
+            caller_account_copied = false;
+            caller_account_copy_failed = false;
+            this.renderPosts();
+          }, 2000);
+        }}>${caller_account_copied ? 'Copied' : caller_account_copy_failed ? 'Failed' : 'Copy'}</button>
+        <br><small><small><code>${caller_account}</code></small></small>
+        <textarea id="caller_account_text" class="copy-only" disabled>${caller_account}</textarea>
+        <br>
+        <br><small>Take your time, we will wait while you send the ${token_symbol} to any of the addresses above</small>
+      </p>
       <button class="send-btn" ?disabled=${this.is_checking_balance}>
         ${this.is_checking_balance
           ? html`<span class="spinner"></span> Checking...`
