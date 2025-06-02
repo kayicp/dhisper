@@ -14,6 +14,8 @@ let caller_account = '';
 let caller_account_copied = false;
 let caller_account_copy_failed = false;
 
+let is_seeing_cost = false;
+
 let dhisper_user = null;
 let token_anon = null;
 let token_user = null;
@@ -29,6 +31,7 @@ let selected_delete_fee_rate = null;
 
 let is_waiting_balance = false;
 let is_viewing_token_details = false;
+let is_checking_balance = false;
 let is_waiting_approval = false;
 let token_id = null;
 
@@ -46,7 +49,7 @@ let token_approval_total = null;
 
 let post_cost = 0;
 let base_cost = 0;
-let max_content_size = 0;
+let max_content_size = 256;
 let extra_chars = 0;
 let extra_cost = 0;
 
@@ -493,7 +496,6 @@ class App {
       spender : { owner : Principal.fromText(dhisper_id), subaccount : [] },
       account : { owner : caller_principal, subaccount : [] }
     });
-
     token_id = selected_create_fee_token_canister;
     token_fee = Number(await token_fee_promise);
     base_cost = Number(selected_create_fee_rate.minimum_amount);
@@ -513,14 +515,18 @@ class App {
     const require_approval = token_approval_insufficient || token_approval_expired;     
     
     const total_cost = require_approval? post_cost + token_fee : post_cost;
+    token_total = { amount: total_cost, msg: `Total posting fee: ${Number(total_cost) / token_power} ${token_symbol}` };
+    token_details = [
+      { amount: base_cost, msg: `Posting fee: ${Number(base_cost) / token_power} ${token_symbol}`, submsg: `helps keep Dhisper spam-free and ad-free for you`},
+      { amount: token_fee, msg: `Network fee: ${Number(token_fee) / token_power} ${token_symbol}`, submsg: `covers the small cost of recording your post`},
+      { amount: require_approval ? token_fee : BigInt(0), msg: `Authorization fee: ${Number(token_fee) / token_power} ${token_symbol}`, submsg: `allows Dhisper to deduct the posting fee automatically for you`},
+      { amount: extra_cost, msg: `Extra characters fee: ${Number(extra_cost) / token_power} ${token_symbol}`, submsg: `You exceed ${max_content_size} characters; either trim it or pay a little extra` },
+    ];
+    if (!is_seeing_cost) {
+      is_seeing_cost = true;
+      return this.renderPosts();
+    }
     if (token_balance < total_cost) {
-      token_total = { amount: total_cost, msg: `Total cost to post: ${Number(total_cost) / token_power} ${token_symbol}` };
-      token_details = [
-        { amount: base_cost, msg: `Post creation fee: ${Number(base_cost) / token_power} ${token_symbol}`, submsg: `helps keep Dhisper spam-free & running smoothly`},
-        { amount: token_fee, msg: `Transfer fee: ${Number(token_fee) / token_power} ${token_symbol}`, submsg: `covers the fee to send ${token_symbol} tokens`},
-        { amount: extra_cost, msg: `Extra characters fee: ${Number(extra_cost) / token_power} ${token_symbol}`, submsg: `you exceeded the ${max_content_size}-character limit; try trimming your text` },
-        { amount: require_approval ? token_fee : BigInt(0), msg: `Approval fee: ${Number(token_fee) / token_power} ${token_symbol}`, submsg: `covers the fee to approve Dhisper to spend your ${token_symbol} tokens`}
-      ];
       is_waiting_balance = true;
       return this.renderPosts();
     };
@@ -613,6 +619,7 @@ class App {
       this.isComposingNewThread = true; 
       this.renderPosts();
     }}>+</button>`;
+    // todo: remove the char count limit red?
     const create_new_thread_form = html`
       ${this.isComposingNewThread
       ? html`<div class="backdrop" @click=${() => { 
@@ -621,52 +628,22 @@ class App {
         }}></div>`
       : null}
       <div class="compose-drawer ${this.isComposingNewThread ? 'open' : ''}">
-        <div>Create New Thread</div>
-        <form @submit=${(e) => this.createNewThread(e)}>
-          <label class="field">
-            <input type="text" placeholder="What's on your mind?" 
-                  @input=${(e) => this.updateCharCount(e)} 
-                  .value=${this.postContent || ''}
-                  required />
-            <span class="char-count ${this.charCount >= 256 ? 'limit' : ''}">
-              ${this.charCount}/256
-            </span>
-          </label>
+        <p><strong>Create New Thread</strong></p>
+        <label class="field">
+          <input type="text" placeholder="What's on your mind?" 
+                @input=${(e) => this.updateCharCount(e)} 
+                .value=${this.postContent || ''}
+                required />
+          <span class="char-count ${this.charCount >= max_content_size ? 'limit' : ''}">
+            ${this.charCount}/${max_content_size}
+          </span>
+        </label>
 
-          <!-- 
-          <label class="field">
-            <select @change=${(e) => this.updateAssetType(e)} .value=${this.assetType}>
-              <option value="None">None</option>
-              <option value="ICRC_1">ICRC_1</option>
-              <option value="ICRC_2">ICRC_2</option>
-            </select>
-          </label>
-
-          <label class="field">
-            <input type="text" placeholder="Subaccount (hex, optional)" />
-          </label>
-
-          ${this.assetType === 'ICRC_1'
-            ? html`<div class="info">Your balance: 1.5 ICP, Token minimum: 1 ICP</div>`
-            : this.assetType === 'ICRC_2'
-            ? html`
-                <label class="field">
-                  <select>
-                    <option value="ICP">Internet Computer (ICP)</option>
-                    <option value="ckBTC">ckBTC (ckBTC)</option>
-                  </select>
-                </label>
-                <div class="info">Fee: 0</div>
-              `
-            : null}
-          -->
-            
-          <button type="submit" class="send-btn" ?disabled=${this.isCreatingNewThread}>
-            ${this.isCreatingNewThread
-              ? html`<span class="spinner"></span> Sending...`
-              : html`➤ Send`}
-          </button>
-        </form>
+        <button class="send-btn" ?disabled=${this.isCreatingNewThread} @click=${(e) => this.createNewThread(e)}>
+          ${this.isCreatingNewThread
+            ? html`<span class="spinner"></span> Sending...`
+            : html`➤ Send`}
+        </button>
       </div>
     `;
     const wallet_selectors = html`
@@ -677,13 +654,16 @@ class App {
         }}></div>`
       : null}
       <div class="wallet-drawer ${this.isSelectingWallet ? 'open' : ''}">
-        <div>Connect your wallet</div>
-
+        <p>
+          <strong>Sign in to start posting</strong>
+          <br>
+          <small><small>No password needed</small></small>
+        </p>
         <button class="send-btn" ?disabled=${this.isConnectingWallet} @click=${(e) => this.loginInternetIdentity(e)}>
-            ${this.isConnectingWallet
-              ? html`<span class="spinner"></span> Connecting...`
-              : html`Internet Identity`}
-          </button>
+          ${this.isConnectingWallet
+            ? html`<span class="spinner"></span> Connecting...`
+            : html`Continue with Internet Identity`}
+        </button>
       </div>
     `;
     const replies_pane = this.posts.length > 0 && this.isCommentOpen && this.activeThread
@@ -742,7 +722,6 @@ class App {
               <input
                 type="text"
                 placeholder="Write your comment..."
-                maxlength="256"
                 .value=${this.commentInput}
                 @input=${(e) => {
                   this.commentInput = e.target.value;
@@ -750,8 +729,8 @@ class App {
                   this.renderPosts();
                 }}
               />
-              <div class="char-count ${this.commentCharCount >= 256 ? 'limit' : ''}">
-                ${this.commentCharCount}/256
+              <div class="char-count ${this.commentCharCount >= max_content_size ? 'limit' : ''}">
+                ${this.commentCharCount}/${max_content_size}
               </div>
             </div>
     
@@ -823,6 +802,39 @@ class App {
   //       </button>
   //   </div>
   // `;
+      const cost_and_reasons = html`
+      ${is_seeing_cost
+      ? html`<div class="cost-backdrop" @click=${() => { 
+          is_seeing_cost = false; 
+          this.renderPosts(); 
+        }}></div>`
+      : null}
+      <div class="cost-drawer ${is_seeing_cost ? 'open' : ''}">
+        <p>
+          <strong>${token_total.msg}</strong>
+          <button class="view-btn" @click=${(e) => this.viewTokenDetails(e)}>Show fee details</button>
+          <br>
+          <br>
+          <small>Other than posting, you also get these <strong>benefits</strong></small>:
+          <br>
+          <br>
+          <strong>• Exclusive Community</strong>
+          <br>
+          <small><small>Only committed users; no spams, trolls or bots. Enjoy genuine conversations.</small></small>
+          <br>
+          <br>
+          <strong>• No Ads & No Trackers</strong>
+          <br>
+          <small><small>Scroll, post, & chat without ad banners, ad pop-ups, or hidden data-mining.</small></small>
+          <br>
+          <br>
+          <strong>• Token Airdrops</strong>
+          <br>
+          <small><small>Post now & lock in your spot for token rewards!</small></small>
+        </p>
+        <button class="send-btn">Post</button>
+      </div>
+    `;
     const token_approve_form = html`
       ${this.isRequireApproval
       ? html`<div class="approve-backdrop" @click=${() => { 
@@ -847,10 +859,13 @@ class App {
       }}></div>`
     : null}
     <div class="balance-drawer ${is_waiting_balance ? 'open' : ''}">
-      <div>Not enough ${token_symbol} in your wallet</div>
-      <p>${token_total.msg}</p>
-      <button class="send-btn" @click=${(e) => this.viewTokenDetails(e)}>View details</button>
-      <p>Send ${(token_total.amount - token_balance) / token_power} ${token_symbol} to your ... </p>
+      <h3>Not enough ${token_symbol} in your wallet</h3>
+      <span>
+        <label>${token_total.msg}</label>
+        <button class="copy-btn" @click=${(e) => this.viewTokenDetails(e)}>View details</button>
+      </span>
+      <hr>
+      <div>You need to send ${(token_total.amount - token_balance) / token_power} ${token_symbol} into your ... </div>
       <span><label>Principal: </label><button class="copy-btn ${caller_principal_copied ? "copied" : caller_principal_copy_failed ? 'copy-failed' : ''}" @click=${async (e) => { 
         e.preventDefault();
         try {
@@ -896,7 +911,13 @@ class App {
       }}>${caller_account_copied ? 'Copied' : caller_account_copy_failed ? 'Failed' : 'Copy'}</button></span>
       <pre>${caller_account}</pre>
       <textarea id="caller_account_text" class="copy-only">${caller_account}</textarea>
-      
+      <hr>
+      <div>Take your time, we will wait while you send the ${token_symbol} to any of the addresses above</div>
+      <button class="send-btn" ?disabled=${this.is_checking_balance}>
+        ${this.is_checking_balance
+          ? html`<span class="spinner"></span> Checking...`
+          : html`I have sent the ${token_symbol}`}
+      </button>
     </div>
 `;
     const token_balance_waiter_details = html`
@@ -907,12 +928,16 @@ class App {
       }}></div>`
     : null}
     <div class="cost-breakdown-drawer ${is_viewing_token_details ? 'open' : ''}">
-      ${token_details.map((detail, detail_index) => {
-          return detail.amount > 0? html`
-          <label> + ${detail.msg}</label>
-          <pre>${detail.submsg}</pre>` : null
-        })}
-      <label> = ${token_total.msg}</label>
+      <p>
+      <strong>Fee Details</strong>
+      <br>
+      <br>
+      ${token_details.map(detail => {
+        return detail.amount > 0? html` + <strong>${detail.msg}</strong><br>
+        <small><small>${detail.submsg}</small></small>
+        <br><br>` : null
+      })} = <strong>${token_total.msg}</strong>
+      </p>
     </div>
   `;
     render(html`
@@ -925,6 +950,7 @@ class App {
         ${add_reply_form}
         
         ${wallet_selectors}
+        ${cost_and_reasons}
         ${token_balance_waiter}
         ${token_balance_waiter_details}
         ${token_approve_form}
@@ -934,3 +960,10 @@ class App {
 }
 
 export default App;
+
+/*
+flow: 
+A) compose > show cost > select wallet (or skip since we only have 1 wallet) > check wallet balance / wait topup / change wallet > check approval > approve for post > approve for future posts > call create post
+
+B) compose > select wallet (or skip since we only have 1 wallet) > show cost details (track if shown) > check wallet balance / wait topup / change wallet > check approval > approve for current post > include approve for future posts > call create post
+ */
