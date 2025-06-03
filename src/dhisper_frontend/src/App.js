@@ -15,6 +15,7 @@ let caller_account_copied = false;
 let caller_account_copy_failed = false;
 
 let is_seeing_cost = false;
+let is_paying = false;
 
 let dhisper_user = null;
 let token_anon = null;
@@ -485,6 +486,7 @@ class App {
     if (selected_create_fee_token_canister == null) {
       // return this.selectTokenCanister();
     };
+    
     token_anon = genToken(selected_create_fee_token_canister);
     const token_fee_promise = token_anon.icrc1_fee();
     const token_name_promise = token_anon.icrc1_name();
@@ -496,6 +498,8 @@ class App {
       spender : { owner : Principal.fromText(dhisper_id), subaccount : [] },
       account : { owner : caller_principal, subaccount : [] }
     });
+    is_checking_balance = true;
+    this.renderPosts();
     token_id = selected_create_fee_token_canister;
     token_fee = Number(await token_fee_promise);
     base_cost = Number(selected_create_fee_rate.minimum_amount);
@@ -508,6 +512,7 @@ class App {
     token_power = 10 ** Number(await token_decimals_promise);
     token_balance = Number(await token_balance_promise);
     token_approval = await token_approval_promise;
+    is_checking_balance = false;
 
     post_cost = base_cost + token_fee + extra_cost;
     token_approval_insufficient = token_approval.allowance < post_cost; 
@@ -526,10 +531,12 @@ class App {
       is_seeing_cost = true;
       return this.renderPosts();
     }
+    
     if (token_balance < total_cost) {
       is_waiting_balance = true;
       return this.renderPosts();
     };
+    is_waiting_balance = false;
     if (require_approval) {
       token_approval_total = { amount : post_cost, msg: `Approve Dhisper to spend ${Number(post_cost) / token_power} ${token_symbol}` }
       is_waiting_approval = true;
@@ -538,7 +545,7 @@ class App {
     // call the create_post endpoint now that we have enough balance & approval
 
     this.isCreatingNewThread = false;
-    return this.renderPosts();
+    this.renderPosts();
   }
 
   viewTokenDetails(e) {
@@ -833,9 +840,11 @@ class App {
           <br>
           <small><small>Post now & lock in your spot for token rewards!</small></small>
         </p>
-        <button class="send-btn" @click=${(e) => {
+        <button class="send-btn" ?disabled=${is_paying} @click=${(e) => {
+          is_paying = true;
           this.createNewThread(e);
-        }}>Pay</button>
+        }}>${is_paying ? html`<span class="spinner"></span> Paying...`
+          : html`Pay`}</button>
       </div>
     `;
     const token_approve_form = html`
@@ -864,12 +873,12 @@ class App {
     : null}
     <div class="balance-drawer ${is_waiting_balance ? 'open' : ''}">
       <p>
-        <strong>Not enough ${token_symbol} in your wallet</strong><br>
+        <strong>Oops, you don't have enough ${token_symbol}</strong><br>
         <br><small>${token_total.msg}</small>
-        <br><small>Your balance: ${token_balance / token_power} ${token_symbol}</small>
+        <br><small>Your balance: ${is_checking_balance ? html`<span class="spinner"></span>` : (token_balance / token_power)} ${token_symbol}</small>
         <br>
-        <br>You need to <strong>send ${(token_total.amount - token_balance) / token_power} ${token_symbol}</strong> into your ...<br>
-        <br>... <strong>Principal</strong>: <button class="copy-btn ${caller_principal_copied ? "copied" : caller_principal_copy_failed ? 'copy-failed' : ''}" @click=${async (e) => { 
+        <br>You need to <strong>send ${is_checking_balance ? html`<span class="spinner"></span>` : ((token_total.amount - token_balance) / token_power)} ${token_symbol}</strong> to one of your ${token_symbol} addresses:<br>
+        <br><strong>• Principal</strong>: <button class="copy-btn ${caller_principal_copied ? "copied" : caller_principal_copy_failed ? 'copy-failed' : ''}" @click=${async (e) => { 
           e.preventDefault();
           try {
             await navigator.clipboard.writeText(caller_principal.toText());
@@ -877,13 +886,13 @@ class App {
           } catch (e) {
             console.error('copy principal', e);
             const to_copy = document.getElementById("caller_principal_text");
-            to_copy.disabled = false;
+            to_copy.value = caller_principal.toText();
             to_copy.select();
             if (document.execCommand('copy')) {
               caller_principal_copied = true;
             } else caller_principal_copy_failed = true;
-            to_copy.setSelectionRange(0, 0);
-            to_copy.disabled = true;
+            // to_copy.setSelectionRange(0, 0);
+            to_copy.value = '';
           }        
           this.renderPosts(); 
           setTimeout(() => {
@@ -893,9 +902,9 @@ class App {
         }}>${caller_principal_copied ? 'Copied' : caller_principal_copy_failed ? 'Failed' : 'Copy'}</button>
         <br>
         <small><small><code>${caller_principal? caller_principal.toText() : ''}</code></small></small>
-        <textarea id="caller_principal_text" class="copy-only" disabled>${caller_principal? caller_principal.toText() : ''}</textarea>
+        <textarea id="caller_principal_text" class="copy-only"></textarea>
         <br>
-        <br>... or <strong>Account</strong>: <button class="copy-btn ${caller_account_copied ? "copied" : caller_account_copy_failed? 'copy-failed' : ''}" @click=${async (e) => { 
+        <br><strong>• Account</strong>: <button class="copy-btn ${caller_account_copied ? "copied" : caller_account_copy_failed? 'copy-failed' : ''}" @click=${async (e) => { 
           e.preventDefault();
           try {
             await navigator.clipboard.writeText(caller_account);
@@ -903,13 +912,13 @@ class App {
           } catch (e) {
             console.error('copy account', e);
             const to_copy = document.getElementById("caller_account_text");
-            to_copy.disabled = false;
+            to_copy.value = caller_account;
             to_copy.select();
             if (document.execCommand('copy')) {
               caller_account_copied = true;
             } else caller_account_copy_failed = true;
-            to_copy.setSelectionRange(0, 0);
-            to_copy.disabled = true;
+            // to_copy.setSelectionRange(0, 0);
+            to_copy.value = '';
           }        
           this.renderPosts(); 
           setTimeout(() => {
@@ -919,14 +928,14 @@ class App {
           }, 2000);
         }}>${caller_account_copied ? 'Copied' : caller_account_copy_failed ? 'Failed' : 'Copy'}</button>
         <br><small><small><code>${caller_account}</code></small></small>
-        <textarea id="caller_account_text" class="copy-only" disabled>${caller_account}</textarea>
+        <textarea id="caller_account_text" class="copy-only"></textarea>
         <br>
-        <br><small>Take your time, we will wait while you send the ${token_symbol} to any of the addresses above</small>
+        <br><small><small>No rush, we'll be right here waiting for your top-up.</small></small>
       </p>
-      <button class="send-btn" ?disabled=${this.is_checking_balance}>
-        ${this.is_checking_balance
+      <button class="send-btn" ?disabled=${is_checking_balance} @click=${(e) => this.createNewThread(e)}>
+        ${is_checking_balance
           ? html`<span class="spinner"></span> Checking...`
-          : html`I have sent the ${token_symbol}`}
+          : html`I have sent`}
       </button>
     </div>
 `;

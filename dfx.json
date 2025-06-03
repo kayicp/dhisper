@@ -20,7 +20,7 @@
     },
     "dhisper_frontend": {
       "dependencies": [
-        "dhisper_backend", "internet_identity"
+        "dhisper_backend"
       ],
       "source": [
         "src/dhisper_frontend/dist"
