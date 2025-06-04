@@ -237,7 +237,7 @@ html, body {
   bottom: 0;
 }
 
-.token-drawer {
+.cost-breakdown-drawer {
   position: fixed;
   bottom: -100%;
   left: 0;
@@ -249,6 +249,30 @@ html, body {
   padding: 24px;
   box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.4);
   z-index: 110;
+  color: white;
+  transition: bottom 0.4s ease;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  overflow-y: auto;
+}
+
+.cost-breakdown-drawer.open {
+  bottom: 0;
+}
+
+.token-drawer {
+  position: fixed;
+  bottom: -100%;
+  left: 0;
+  width: 100%;
+  // height: 75vh;
+  background: linear-gradient(to top, #1a1a1a, #2d2d2d);
+  border-top-left-radius: 20px;
+  border-top-right-radius: 20px;
+  padding: 24px;
+  box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.4);
+  z-index: 120;
   color: white;
   transition: bottom 0.4s ease;
   display: flex;
@@ -272,7 +296,7 @@ html, body {
   border-top-right-radius: 20px;
   padding: 24px;
   box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.4);
-  z-index: 120;
+  z-index: 130;
   color: white;
   transition: bottom 0.4s ease;
   display: flex;
@@ -285,7 +309,7 @@ html, body {
   bottom: 0;
 }
 
-.cost-breakdown-drawer {
+.approve-drawer {
   position: fixed;
   bottom: -100%;
   left: 0;
@@ -296,7 +320,7 @@ html, body {
   border-top-right-radius: 20px;
   padding: 24px;
   box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.4);
-  z-index: 130;
+  z-index: 140;
   color: white;
   transition: bottom 0.4s ease;
   display: flex;
@@ -305,7 +329,7 @@ html, body {
   overflow-y: auto;
 }
 
-.cost-breakdown-drawer.open {
+.approve-drawer.open {
   bottom: 0;
 }
 
@@ -402,7 +426,7 @@ option {
   animation: fadeIn 0.3s ease forwards;
 }
 
-.token-backdrop {
+.cost-breakdown-backdrop {
   position: fixed;
   inset: 0;
   background: rgba(0, 0, 0, 0.6);
@@ -411,7 +435,7 @@ option {
   animation: fadeIn 0.3s ease forwards;
 }
 
-.balance-backdrop {
+.token-backdrop {
   position: fixed;
   inset: 0;
   background: rgba(0, 0, 0, 0.6);
@@ -420,12 +444,21 @@ option {
   animation: fadeIn 0.3s ease forwards;
 }
 
-.cost-breakdown-backdrop {
+.balance-backdrop {
   position: fixed;
   inset: 0;
   background: rgba(0, 0, 0, 0.6);
   backdrop-filter: blur(2px);
   z-index: 125;
+  animation: fadeIn 0.3s ease forwards;
+}
+
+.approve-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(2px);
+  z-index: 135;
   animation: fadeIn 0.3s ease forwards;
 }
 
@@ -817,6 +850,67 @@ select:focus {
 
 p {
   word-break:break-word;
+}
+
+.radio-option input {
+  position: absolute;
+  opacity: 0;
+}
+
+.radio-option label {
+  display: flex;
+  flex-direction: column;
+  padding: 15px 20px;
+  border-radius: 20px;
+  background: linear-gradient(45deg, #585858, #242424);
+  transition: all 0.3s ease;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+  cursor: pointer;
+  position: relative;
+}
+
+.radio-option input:checked + label {
+  background: linear-gradient(45deg, #25a32a, #025a9f);
+  transform: scale(1.05);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+}
+
+.radio-option input:checked + label:before {
+  content: 'Selected';
+  position: absolute;
+  right: 10px;
+    font-weight: bold;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+  background-color: white;
+  color: #103577;
+  font-size: small;
+  padding: 2px 5px;
+  border-radius: 7px;
+}
+
+.radio-option label:hover {
+    background: linear-gradient(45deg, #19551c, #00355f);
+  transform: scale(1.025);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+}
+
+.radio-option input:disabled + label {
+  background: linear-gradient(45deg, #2c2c2c, #030303);
+  color: #888;
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.recommended-tag {
+  position: absolute;
+    font-weight: bold;
+  right: 10px;
+  background-color: #FF9800;
+box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+  color: #000000;
+  font-size: small;
+  padding: 2px 5px;
+  border-radius: 7px;
 }
 
 *,

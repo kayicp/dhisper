@@ -7,6 +7,7 @@ import { Principal } from '@dfinity/principal';
 import { AccountIdentifier } from '@dfinity/ledger-icp'
 
 let internet_identity = null;
+let caller_agent = null;
 let caller_principal = null;
 let caller_principal_copied = false;
 let caller_principal_copy_failed = false;
@@ -30,11 +31,16 @@ let selected_delete_fee_standard = null;
 let selected_delete_token_canister = null;
 let selected_delete_fee_rate = null;
 
+let is_pre_creating_new_thread = false;
+let is_creating_new_thread = false;
 let is_waiting_balance = false;
 let is_viewing_token_details = false;
 let is_checking_balance = false;
 let is_waiting_approval = false;
+let is_approving = false;
 let token_id = null;
+
+let selected_approval_plan = 'ten';
 
 let token_balance = 0;
 let token_name = "";
@@ -220,7 +226,7 @@ class App {
     this.direction = null;
     this.isAnimating = false;
     this.isComposingNewThread = false;
-    this.isCreatingNewThread = false;
+    
     this.isSelectingWallet = false;
     this.isConnectingWallet = false;
     this.isSelectingToken = false;
@@ -262,7 +268,7 @@ class App {
     this.postContent = !this.postContent ? "" : this.postContent.trim();
     if (this.postContent.length === 0) return;
 
-    this.isCreatingNewThread = true;
+    is_pre_creating_new_thread = true;
     this.renderPosts();
 
     try {
@@ -274,7 +280,7 @@ class App {
         metadata: [],
         authorization: { None: { subaccount: [] } },
       });
-      this.isCreatingNewThread = false;
+      is_pre_creating_new_thread = false;
       if ('Err' in create_res) {
         alert(`Create post error: ${JSON.stringify(create_res.Err)}`);
       } else {
@@ -304,7 +310,7 @@ class App {
         this.startSlide(0, 'down');
       }
     } catch (e) {
-      this.isCreatingNewThread = false;
+      is_pre_creating_new_thread = false;
     }
   }
 
@@ -471,10 +477,10 @@ class App {
     e.preventDefault();
     this.postContent = !this.postContent ? "" : this.postContent.trim();
     if (this.postContent.length === 0) {
-      this.isCreatingNewThread = false;
+      is_pre_creating_new_thread = false;
       return this.renderPosts();
     };
-    this.isCreatingNewThread = true;
+    is_pre_creating_new_thread = true;
     this.renderPosts();
     if (dhisper_user == null || caller_principal == null) {
       return this.selectWallet(e);
@@ -524,27 +530,49 @@ class App {
     token_details = [
       { amount: base_cost, msg: `Posting fee: ${Number(base_cost) / token_power} ${token_symbol}`, submsg: `helps keep Dhisper spam-free and ad-free for you`},
       { amount: token_fee, msg: `Network fee: ${Number(token_fee) / token_power} ${token_symbol}`, submsg: `covers the small cost of recording your post`},
-      { amount: require_approval ? token_fee : BigInt(0), msg: `Authorization fee: ${Number(token_fee) / token_power} ${token_symbol}`, submsg: `allows Dhisper to deduct the posting fee automatically for you`},
+      { amount: require_approval ? token_fee : BigInt(0), msg: `Payment Approval fee: ${Number(token_fee) / token_power} ${token_symbol}`, submsg: `allows Dhisper to deduct the posting fee automatically for you`},
       { amount: extra_cost, msg: `Extra characters fee: ${Number(extra_cost) / token_power} ${token_symbol}`, submsg: `You exceed ${max_content_size} characters; either trim it or pay a little extra` },
     ];
     if (!is_seeing_cost) {
       is_seeing_cost = true;
       return this.renderPosts();
     }
-    
     if (token_balance < total_cost) {
       is_waiting_balance = true;
       return this.renderPosts();
     };
     is_waiting_balance = false;
     if (require_approval) {
-      token_approval_total = { amount : post_cost, msg: `Approve Dhisper to spend ${Number(post_cost) / token_power} ${token_symbol}` }
+      token_approval_total = { amount : post_cost, msg: `Allow Dhisper to use ${Number(post_cost) / token_power} ${token_symbol}` }
       is_waiting_approval = true;
       return this.renderPosts();
-    }
-    // call the create_post endpoint now that we have enough balance & approval
+    } else is_seeing_cost = false;
 
-    this.isCreatingNewThread = false;
+    is_pre_creating_new_thread = true;
+    is_creating_new_thread = true;
+    this.renderPosts();
+    const create_post_res = await dhisper_user.kay4_create({
+      thread: [],
+      content: this.postContent,
+      files: [],
+      owners: [],
+      metadata: [],
+      authorization: { ICRC_2: {
+        subaccount: [],
+        canister_id: selected_create_fee_token_canister,
+        fee: [BigInt(base_cost + extra_cost)]
+      } }
+    });
+    is_creating_new_thread = false;
+    is_pre_creating_new_thread = false;
+    this.isComposingNewThread = 'Err' in create_post_res;
+    if (this.isComposingNewThread) {
+      // todo: create error popup
+      console.error('create thread err', create_post_res.Err);
+    } else {
+      // todo: create ok popup
+      console.log('create thread ok', create_post_res.Ok);
+    }
     this.renderPosts();
   }
 
@@ -575,19 +603,46 @@ class App {
 
   async handleAuthenticated(e) {
     const identity = await internet_identity.getIdentity();
+    caller_agent = await HttpAgent.create({ identity });
     caller_principal = identity.getPrincipal();
     caller_account = AccountIdentifier.fromPrincipal({ principal: caller_principal }).toHex();
-    console.log({ identity, caller: caller_principal.toText(), caller_account });
+    // console.log({ identity, caller: caller_principal.toText(), caller_account });
 
     await prepareTokens();
 
-    dhisper_user = genDhisper(dhisper_id, { agent: await HttpAgent.create({ identity }) });
+    dhisper_user = genDhisper(dhisper_id, { agent: caller_agent });
     this.isSelectingWallet = false;
     this.isConnectingWallet = false;
     
-    if (this.isCreatingNewThread) {
+    if (is_pre_creating_new_thread) {
       this.createNewThread(e);
     };
+  }
+
+  async approveToken(e) {
+    e.preventDefault();
+    is_approving = true;
+    this.renderPosts();
+
+    const token_user = genToken(selected_create_fee_token_canister, { agent: caller_agent });
+    const approve_res = await token_user.icrc2_approve({
+      from_subaccount: [],
+      amount: BigInt(post_cost * (selected_approval_plan == 'ten' ? 10 : selected_approval_plan == 'hundred' ? 100 : 1)),
+      spender : { owner : Principal.fromText(dhisper_id), subaccount : [] },
+      expected_allowance: [],
+      expires_at: [],
+      fee: [],
+      memo: [],
+      created_at_time: [],
+    });
+    is_approving = false;
+    if ('Err' in approve_res) {
+      console.error('approve err', approve_res.Err);
+      // JSON.stringify(approve_res.Err)
+    } else is_waiting_approval = false;
+    if (is_pre_creating_new_thread) {
+      this.createNewThread(e);
+    } else this.renderPosts();
   }
 
   renderPosts() {
@@ -646,8 +701,8 @@ class App {
           </span>
         </label>
 
-        <button class="send-btn" ?disabled=${this.isCreatingNewThread} @click=${(e) => this.createNewThread(e)}>
-          ${this.isCreatingNewThread
+        <button class="send-btn" ?disabled=${is_pre_creating_new_thread} @click=${(e) => this.createNewThread(e)}>
+          ${is_pre_creating_new_thread
             ? html`<span class="spinner"></span> Posting...`
             : html`➤ Post`}
         </button>
@@ -813,7 +868,7 @@ class App {
       ${is_seeing_cost
       ? html`<div class="cost-backdrop" @click=${() => { 
           is_seeing_cost = false;
-          this.isCreatingNewThread = false;
+          is_pre_creating_new_thread = false;
           this.renderPosts(); 
         }}></div>`
       : null}
@@ -847,24 +902,26 @@ class App {
           : html`Pay`}</button>
       </div>
     `;
-    const token_approve_form = html`
-      ${this.isRequireApproval
-      ? html`<div class="approve-backdrop" @click=${() => { 
-          this.isRequireApproval = false; 
-          this.renderPosts();
-        }}></div>`
-      : null}
-      <div class="approve-drawer ${this.isRequireApproval ? 'open' : ''}">
-        <div>Select your token approval:</div>
-        
-        <button class="send-btn" ?disabled=${this.isApproving} @click=${(e) => this.approveToken(e)}>
-            ${this.isApproving
-              ? html`<span class="spinner"></span> Approving...`
-              : html`Confirm Approval`}
-          </button>
-      </div>
-    `;
-    // todo: ask ai to think if casual users are okay with this
+    const token_balance_waiter_details = html`
+    ${is_viewing_token_details
+    ? html`<div class="cost-breakdown-backdrop" @click=${() => { 
+        is_viewing_token_details = false; 
+        this.renderPosts(); 
+      }}></div>`
+    : null}
+    <div class="cost-breakdown-drawer ${is_viewing_token_details ? 'open' : ''}">
+      <p>
+      <strong>Fee Details</strong>
+      <br>
+      <br>
+      ${token_details.map(detail => {
+        return detail.amount > 0? html` + <strong>${detail.msg}</strong><br>
+        <small><small>${detail.submsg}</small></small>
+        <br><br>` : null
+      })} = <strong>${token_total.msg}</strong>
+      </p>
+    </div>
+  `;
     const token_balance_waiter = html`${is_waiting_balance
     ? html`<div class="balance-backdrop" @click=${() => { 
         is_waiting_balance = false; 
@@ -939,26 +996,65 @@ class App {
       </button>
     </div>
 `;
-    const token_balance_waiter_details = html`
-    ${is_viewing_token_details
-    ? html`<div class="cost-breakdown-backdrop" @click=${() => { 
-        is_viewing_token_details = false; 
-        this.renderPosts(); 
-      }}></div>`
-    : null}
-    <div class="cost-breakdown-drawer ${is_viewing_token_details ? 'open' : ''}">
-      <p>
-      <strong>Fee Details</strong>
-      <br>
-      <br>
-      ${token_details.map(detail => {
-        return detail.amount > 0? html` + <strong>${detail.msg}</strong><br>
-        <small><small>${detail.submsg}</small></small>
-        <br><br>` : null
-      })} = <strong>${token_total.msg}</strong>
-      </p>
-    </div>
-  `;
+    
+  const token_approve_form = html`
+      ${is_waiting_approval
+      ? html`<div class="approve-backdrop" @click=${() => {
+          if (is_approving) {
+            // wait
+          } else is_waiting_approval = false; 
+          this.renderPosts();
+        }}></div>`
+      : null}
+      <div class="approve-drawer ${is_waiting_approval ? 'open' : ''}">
+        <p>
+          <strong>Do you want to save time & cut the ${token_symbol} payment approval fees in the future?</strong><br>
+          <small><small>Please select how many posts you want to include in this single approval:</small></small>
+        </p>
+        <div class="radio-option">
+          <input type="radio" id="approval1" name="approval" ?checked=${selected_approval_plan == 'one'} ?disabled=${selected_approval_plan != 'one' && is_approving} @change=${() => {
+            const radio = document.getElementById("approval1");
+            if (radio.checked) selected_approval_plan = 'one';
+            this.renderPosts();
+          }}>
+          <label for="approval1">
+            <small><strong>Just this post</strong></small>
+            <small><small><small>You will need to pay the payment approval fee again for your next post. Best if you post rarely.</small></small></small>
+          </label>
+        </div>
+        <br>
+        <div class="radio-option">
+          <input type="radio" id="approval2" name="approval" ?checked=${selected_approval_plan == 'ten'} ?disabled=${selected_approval_plan != 'ten' && is_approving} @change=${() => {
+            const radio = document.getElementById("approval2");
+            if (radio.checked) selected_approval_plan = 'ten';
+            this.renderPosts();
+          }}>
+          <label for="approval2">
+            <small><strong>10 posts</strong></small>
+            <small><small><small>Let's skip the this step & cut the payment approval fees for your next 9 posts.</small></small></small>
+            ${selected_approval_plan !== 'ten'? html`<span class="recommended-tag">Recommended</span>` : null} 
+          </label>
+        </div>
+        <br>
+        <div class="radio-option">
+          <input type="radio" id="approval3" name="approval" ?checked=${selected_approval_plan == 'hundred'} ?disabled=${selected_approval_plan != 'hundred' && is_approving} @change=${() => {
+            const radio = document.getElementById("approval3");
+            if (radio.checked) selected_approval_plan = 'hundred';
+            this.renderPosts();
+          }}>
+          <label for="approval3">
+            <small><strong>100 posts</strong></small>
+            <small><small><small>Enjoy smooth experience & cut the payment approval fees for your next 99 posts. Ideal if you're active.</small></small></small>
+          </label>
+        </div>
+        <br>
+        <button class="send-btn" ?disabled=${is_approving} @click=${(e) => this.approveToken(e)}>
+            ${is_approving
+              ? html`<span class="spinner"></span> Approving...`
+              : html`Confirm`}
+          </button>
+      </div>
+    `;
     render(html`
       <div class="post-wrapper">
         ${threads_pane}
@@ -979,10 +1075,3 @@ class App {
 }
 
 export default App;
-
-/*
-flow: 
-A) compose > show cost > select wallet (or skip since we only have 1 wallet) > check wallet balance / wait topup / change wallet > check approval > approve for post > approve for future posts > call create post
-
-B) compose > select wallet (or skip since we only have 1 wallet) > show cost details (track if shown) > check wallet balance / wait topup / change wallet > check approval > approve for current post > include approve for future posts > call create post
- */

@@ -248,7 +248,7 @@ shared (install) actor class Canister(
         // todo: redo icrc-1 authorization
         // case (#ICRC_1 auth) {
         //   let user = { owner = caller; subaccount = auth.subaccount };
-        //   if (Account.validate(user)) return Error.text("Invalid caller account");
+        //   if (not Account.validate(user)) return Error.text("Invalid caller account");
 
         //   let token_minimums = Value.getPrincipalMap(metadata, Kay2.TOKEN_MINIMUMS, RBTree.empty());
         //   let minimum_balance = switch (RBTree.get(token_minimums, Principal.compare, auth.canister_id)) {
@@ -267,7 +267,7 @@ shared (install) actor class Canister(
         // };
         case (#ICRC_2 auth) {
           let user = { owner = caller; subaccount = auth.subaccount };
-          if (Account.validate(user)) return Error.text("Invalid caller account");
+          if (not Account.validate(user)) return Error.text("Invalid caller account");
           let expected_fee = switch (getFee({ auth with content_size; content_max; fee_key = Kay4.CREATE_FEE_RATES })) {
             case (#Ok ok) ok;
             case (#Err err) return #Err err;
@@ -340,7 +340,7 @@ shared (install) actor class Canister(
         // todo: rethink icrc1 delete
         // case (#ICRC_1 auth) {
         //   let user = { owner = caller; subaccount = auth.subaccount };
-        //   if (Account.validate(user)) return Error.text("Invalid caller account");
+        //   if (not Account.validate(user)) return Error.text("Invalid caller account");
 
         //   let token_minimums = Value.getPrincipalMap(metadata, Kay2.TOKEN_MINIMUMS, RBTree.empty());
         //   let minimum_balance = switch (RBTree.get(token_minimums, Principal.compare, auth.canister_id)) {
