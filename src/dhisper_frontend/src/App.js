@@ -6,6 +6,8 @@ import { HttpAgent } from '@dfinity/agent';
 import { Principal } from '@dfinity/principal';
 import { AccountIdentifier } from '@dfinity/ledger-icp'
 
+// todo: clear post content when open/close comments
+
 let internet_identity = null;
 let caller_agent = null;
 let caller_principal = null;
@@ -18,10 +20,7 @@ let caller_account_copy_failed = false;
 let is_composing_post = false;
 let is_seeing_cost = false;
 let is_paying = false;
-
-let dhisper_user = null;
-let token_anon = null;
-let token_user = null;
+let is_popup = false;
 
 let create_fee_rates = null;
 let delete_fee_rates = null;
@@ -528,7 +527,7 @@ class App {
     };
     is_pre_creating_new_post = true;
     this.renderPosts();
-    if (dhisper_user == null || caller_principal == null) {
+    if (caller_principal == null) {
       return this.selectWallet(e);
     }
     // check for token balance
@@ -539,7 +538,7 @@ class App {
       // return this.selectTokenCanister();
     };
     
-    token_anon = genToken(selected_create_fee_token_canister);
+    const token_anon = genToken(selected_create_fee_token_canister);
     const token_fee_promise = token_anon.icrc1_fee();
     const token_name_promise = token_anon.icrc1_name();
     const token_symbol_promise = token_anon.icrc1_symbol();
@@ -596,6 +595,7 @@ class App {
     is_pre_creating_new_post = true;
     is_creating_new_post = true;
     this.renderPosts();
+    const dhisper_user = genDhisper(dhisper_id, { agent: caller_agent });
     const create_post_res = await dhisper_user.kay4_create({
       thread: this.activeThread ? [this.activeThread.id] : [],
       content: post_content,
@@ -655,7 +655,6 @@ class App {
 
     await prepareTokens();
 
-    dhisper_user = genDhisper(dhisper_id, { agent: caller_agent });
     this.isSelectingWallet = false;
     this.isConnectingWallet = false;
     
@@ -1009,6 +1008,17 @@ class App {
           </button>
       </div>
     `;
+  const popup = is_popup ? html`
+    <div class="popup-backdrop"></div>
+    <div class="popup in">
+      <p>
+        <strong>Title</strong><br>
+        <small>Subtitle</small>
+      </p>
+      <button class="send-btn">Ok</button>
+    </div>
+  ` : null;
+
     render(html`
       <div class="post-wrapper">
         ${threads_pane}
@@ -1020,6 +1030,7 @@ class App {
         ${token_balance_waiter}
         ${token_balance_waiter_details}
         ${token_approve_form}
+        ${popup}
       </div>
     `, this.root);
   }

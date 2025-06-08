@@ -15,9 +15,9 @@ import Time64 "../util/motoko/Time64";
 import Pager "../util/motoko/Pager";
 import Queue "../util/motoko/StableCollections/Queue";
 
+// todo: background process
 // todo: for dhisper, replace the post completely when deleting
 // todo: rename modifications
-// todo: combat sybil spam
 
 shared (install) actor class Canister(
   deploy : {
