@@ -161,7 +161,7 @@ html, body {
 
 .compose-drawer {
   position: fixed;
-  bottom: -200%;
+  bottom: -100%;
   left: 0;
   width: 100%;
   // height: 75vh;
@@ -185,7 +185,7 @@ html, body {
 
 .wallet-drawer {
   position: fixed;
-  bottom: -200%;
+  bottom: -100%;
   left: 0;
   width: 100%;
   // height: 75vh;
@@ -209,7 +209,7 @@ html, body {
 
 .cost-drawer {
   position: fixed;
-  bottom: -200%;
+  bottom: -100%;
   left: 0;
   width: 100%;
   // height: 75vh;
@@ -233,7 +233,7 @@ html, body {
 
 .cost-breakdown-drawer {
   position: fixed;
-  bottom: -200%;
+  bottom: -100%;
   left: 0;
   width: 100%;
   // height: 75vh;
@@ -257,7 +257,7 @@ html, body {
 
 .token-drawer {
   position: fixed;
-  bottom: -200%;
+  bottom: -100%;
   left: 0;
   width: 100%;
   // height: 75vh;
@@ -281,7 +281,7 @@ html, body {
 
 .balance-drawer {
   position: fixed;
-  bottom: -200%;
+  bottom: -100%;
   left: 0;
   width: 100%;
   // height: 75vh;
@@ -305,7 +305,7 @@ html, body {
 
 .approve-drawer {
   position: fixed;
-  bottom: -200%;
+  bottom: -100%;
   left: 0;
   width: 100%;
   // height: 75vh;
@@ -345,6 +345,7 @@ html, body {
   width: fit-content;        /* shrink-wrap horizontally */
   // max-width: 90vw;           /* but never wider than the viewport */
   // max-height: 90vh;          /* never taller than the viewport */
+  // min-width: 50vw;
 
   /* layout */
   display: flex;
@@ -616,6 +617,7 @@ option {
   width: 100vw;
   height: 100vh;
   background: linear-gradient(135deg, #1f1c2c, #928dab);
+  box-shadow: 0 0 10px rgba(0, 0, 0, 0.6);
   color: white;
   z-index: 50;
   padding: 2rem;
@@ -627,7 +629,7 @@ option {
 
 @keyframes slideIn {
   from {
-    transform: translateX(100%);
+    transform: translateX(150%);
   }
   to {
     transform: translateX(0);
@@ -639,7 +641,7 @@ option {
     transform: translateX(0);
   }
   to {
-    transform: translateX(100%);
+    transform: translateX(150%);
   }
 }
 

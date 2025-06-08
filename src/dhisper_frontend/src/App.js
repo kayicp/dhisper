@@ -20,7 +20,6 @@ let caller_account_copy_failed = false;
 let is_composing_post = false;
 let is_seeing_cost = false;
 let is_paying = false;
-let is_popup = false;
 
 let create_fee_rates = null;
 let delete_fee_rates = null;
@@ -62,6 +61,8 @@ let base_cost = 0;
 let max_content_size = 256;
 let extra_chars = 0;
 let extra_cost = 0;
+
+let popup_html = null;
 
 const network = process.env.DFX_NETWORK;
 const identityProvider =
@@ -610,10 +611,33 @@ class App {
     });
     is_creating_new_post = false;
     is_pre_creating_new_post = false;
+    is_paying = false;
     is_composing_post = 'Err' in create_post_res;
     if (is_composing_post) {
-      // todo: create error popup
-      console.error('create thread err', create_post_res.Err);
+      const err_obj = create_post_res.Err;
+      console.error('create thread err', err_obj);
+      let title, subtitle;
+      for (const err_key in err_obj) {
+        title = err_key;
+        subtitle = JSON.stringify(err_obj[err_key]);
+        break;
+      }
+      popup_html = html`<p>
+        <strong>${title}</strong><br>
+        <small>${subtitle}</small>
+      </p>
+      <button class="view-btn" @click=${(e) => {
+        e.preventDefault();
+        const popup_exist = document.querySelector('.popup');
+        if (popup_exist) {
+          popup_exist.classList.remove('in');
+          popup_exist.classList.add('out');
+          setTimeout(() => {
+            popup_html = null;
+            this.renderPosts();
+          }, 300);
+        }
+      }}>Close</button>`;
     } else {
       // todo: create ok popup
       console.log('create thread ok', create_post_res.Ok);
@@ -675,14 +699,36 @@ class App {
       spender : { owner : Principal.fromText(dhisper_id), subaccount : [] },
       expected_allowance: [],
       expires_at: [],
-      fee: [],
+      fee: [token_fee + 1],
       memo: [],
       created_at_time: [],
     });
     is_approving = false;
     if ('Err' in approve_res) {
-      console.error('approve err', approve_res.Err);
-      // JSON.stringify(approve_res.Err)
+      const err_obj = approve_res.Err;
+      console.error('approve err', err_obj);
+      let title, subtitle;
+      for (const err_key in err_obj) {
+        title = err_key;
+        subtitle = JSON.stringify(err_obj[err_key]);
+        break;
+      }
+      popup_html = html`<p>
+        <strong>${title}</strong><br>
+        <small>${subtitle}</small>
+      </p>
+      <button class="view-btn" @click=${(e) => {
+        e.preventDefault();
+        const popup_exist = document.querySelector('.popup');
+        if (popup_exist) {
+          popup_exist.classList.remove('in');
+          popup_exist.classList.add('out');
+          setTimeout(() => {
+            popup_html = null;
+            this.renderPosts();
+          }, 300);
+        }
+      }}>Close</button>`;
     } else is_waiting_approval = false;
     if (is_pre_creating_new_post) {
       this.createNewPost(e);
@@ -759,8 +805,11 @@ class App {
     }}>+</button>`;
     const create_new_thread_form = html`
       ${is_composing_post
-      ? html`<div class="compose-backdrop" @click=${() => { 
-          is_composing_post = false; 
+      ? html`<div class="compose-backdrop" @click=${() => {
+          if (is_pre_creating_new_post) return;
+          is_composing_post = false;
+          is_seeing_cost = false;
+          is_paying = false;
           this.renderPosts(); 
         }}></div>` : null}
       <div class="compose-drawer ${is_composing_post ? 'open' : ''}">
@@ -783,14 +832,16 @@ class App {
       ${this.isSelectingWallet
       ? html`<div class="wallet-backdrop" @click=${() => { 
           this.isSelectingWallet = false; 
+          this.isConnectingWallet = false;
+          if (is_pre_creating_new_post) is_pre_creating_new_post = false;
           this.renderPosts(); 
         }}></div>`
       : null}
       <div class="wallet-drawer ${this.isSelectingWallet ? 'open' : ''}">
         <p>
-          <strong>Sign in to start posting</strong>
+          <strong>Sign in to start</strong>
           <br>
-          <small><small>No password needed</small></small>
+          <small><small>No account or password needed</small></small>
         </p>
         <button class="send-btn" ?disabled=${this.isConnectingWallet} @click=${(e) => this.loginInternetIdentity(e)}>
           ${this.isConnectingWallet
@@ -819,7 +870,8 @@ class App {
   // `;
       const cost_and_reasons = html`
       ${is_seeing_cost
-      ? html`<div class="cost-backdrop" @click=${() => { 
+      ? html`<div class="cost-backdrop" @click=${() => {
+          if (is_paying) return;
           is_seeing_cost = false;
           is_pre_creating_new_post = false;
           this.renderPosts(); 
@@ -876,8 +928,10 @@ class App {
     </div>
   `;
     const token_balance_waiter = html`${is_waiting_balance
-    ? html`<div class="balance-backdrop" @click=${() => { 
-        is_waiting_balance = false; 
+    ? html`<div class="balance-backdrop" @click=${() => {
+        if (is_checking_balance) return;
+        is_waiting_balance = false;
+        is_paying = false;
         this.renderPosts(); 
       }}></div>`
     : null}
@@ -953,9 +1007,9 @@ class App {
   const token_approve_form = html`
       ${is_waiting_approval
       ? html`<div class="approve-backdrop" @click=${() => {
-          if (is_approving) {
-            // wait
-          } else is_waiting_approval = false; 
+          if (is_approving) return;
+          is_waiting_approval = false;
+          is_paying = false;
           this.renderPosts();
         }}></div>`
       : null}
@@ -1008,15 +1062,9 @@ class App {
           </button>
       </div>
     `;
-  const popup = is_popup ? html`
+  const popup = popup_html ? html`
     <div class="popup-backdrop"></div>
-    <div class="popup in">
-      <p>
-        <strong>Title</strong><br>
-        <small>Subtitle</small>
-      </p>
-      <button class="send-btn">Ok</button>
-    </div>
+    <div class="popup in">${popup_html}</div>
   ` : null;
 
     render(html`
