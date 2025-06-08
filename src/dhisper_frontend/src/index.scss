@@ -127,7 +127,7 @@ html, body {
   bottom: 32px;
   left: 50%;
   transform: translateX(-50%);
-  z-index: 10;
+  z-index: 70;
 
   width: 64px;
   height: 64px;
@@ -140,7 +140,7 @@ html, body {
   border: none;
   cursor: pointer;
 
-  transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.4s ease;
+  transition: all 0.4s ease;
 }
 
 /* Hover: deepen glow and lift slightly */
@@ -170,7 +170,7 @@ html, body {
   border-top-right-radius: 20px;
   padding: 24px;
   box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.4);
-  z-index: 20;
+  z-index: 80;
   color: white;
   transition: bottom 0.4s ease;
   display: flex;
@@ -181,12 +181,6 @@ html, body {
 
 .compose-drawer.open {
   bottom: 0;
-}
-
-.compose-drawer form {
-  display: flex;
-  flex-direction: column;
-  // gap: 20px;
 }
 
 .wallet-drawer {
@@ -399,12 +393,12 @@ option {
   box-shadow: 0 4px 12px rgba(0, 114, 255, 0.3);
 }
 
-.backdrop {
+.compose-backdrop {
   position: fixed;
   inset: 0;
   background: rgba(0, 0, 0, 0.6);
   backdrop-filter: blur(2px);
-  z-index: 15;
+  z-index: 75;
   animation: fadeIn 0.3s ease forwards;
 }
 
@@ -739,10 +733,6 @@ select:focus {
   text-align: right;
   margin-top: 0.2rem;
   color: #aaa;
-}
-
-.char-count.limit {
-  color: red;
 }
 
 .info-label {

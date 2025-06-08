@@ -15,6 +15,7 @@ let caller_account = '';
 let caller_account_copied = false;
 let caller_account_copy_failed = false;
 
+let is_composing_post = false;
 let is_seeing_cost = false;
 let is_paying = false;
 
@@ -31,8 +32,9 @@ let selected_delete_fee_standard = null;
 let selected_delete_token_canister = null;
 let selected_delete_fee_rate = null;
 
-let is_pre_creating_new_thread = false;
-let is_creating_new_thread = false;
+let is_comments_open = false;
+let is_pre_creating_new_post = false;
+let is_creating_new_post = false;
 let is_waiting_balance = false;
 let is_viewing_token_details = false;
 let is_checking_balance = false;
@@ -40,6 +42,8 @@ let is_waiting_approval = false;
 let is_approving = false;
 let token_id = null;
 
+let post_content = "";
+let char_count = 0;
 let selected_approval_plan = 'ten';
 
 let token_balance = 0;
@@ -69,6 +73,30 @@ const identityProvider =
 BigInt.prototype.toJSON = function () {
   return this.toString();
 };
+
+function normalizeNumber(num) {
+  if (typeof num !== 'number' || isNaN(num)) return String(num);
+
+  // Check if the number is in scientific notation
+  if (num.toString().includes('e') || num.toString().includes('E')) {
+    // Convert from scientific notation to decimal string
+    let [coefficient, exponent] = num.toExponential().split('e');
+    let sign = num < 0 ? '-' : '';
+    coefficient = coefficient.replace('.', '');
+    let exp = parseInt(exponent, 10);
+
+    if (exp < 0) {
+      let zeros = '0.' + '0'.repeat(Math.abs(exp) - 1);
+      return sign + zeros + coefficient;
+    } else {
+      let zeros = '0'.repeat(exp - (coefficient.length - 1));
+      return sign + coefficient + zeros;
+    }
+  }
+
+  // Not in scientific notation, return as string
+  return num.toString();
+}
 
 /**
  * @typedef {'Int'|'Nat'|'Blob'|'Bool'|'Text'|'Principal'|'Array'|'Map'|'ValueMap'} Variant
@@ -137,6 +165,27 @@ Uint8Array.prototype.toJSON = function () {
   return blob2hex(this) // Array.from(this).toString();
 }
 
+/*
+  use these colors
+#3b00b9
+#1e005d
+
+#29abe2
+#522785
+#ed1e79
+
+#f15a24
+#fbb03b
+
+#6A85F1
+#C572EF
+
+#C0D9FF
+#F0B9E5
+
+#0E031F
+#281447
+*/
 function randomGradient() {
   const colors = [];
   for (let i = 0; i < 2; i++) colors.push(`#${Math.floor(Math.random()*16777215).toString(16).padStart(6, '0')}`);
@@ -178,7 +227,6 @@ function timeAgo(date) {
 }
 
 async function prepareTokens() {
-  // todo: get all tokens and generate their actors
   if (create_fee_rates == null || delete_fee_rates == null) {
     await Promise.all([
       new Promise((resolve) => {(async () => {
@@ -225,19 +273,17 @@ class App {
     this.nextIndex = null;
     this.direction = null;
     this.isAnimating = false;
-    this.isComposingNewThread = false;
     
     this.isSelectingWallet = false;
     this.isConnectingWallet = false;
     this.isSelectingToken = false;
     this.isRequireApproval = false;
     this.isApproving = false;
-    this.postContent = "";
-    this.charCount = 0;
+    
     this.assetType = "None";
     this.root = document.getElementById('root');
     this.background = this.getRandomGradient();
-    this.isCommentOpen = false;
+    
     this.activeThread = null;
     this.threadComments = [];
     this.isCommentFormOpen = false;
@@ -253,8 +299,8 @@ class App {
   }
 
   updateCharCount(e) {
-    this.postContent = e.target.value;
-    this.charCount = this.postContent.length;
+    post_content = e.target.value;
+    char_count = post_content.length;
     this.renderPosts();
   }
   
@@ -265,22 +311,22 @@ class App {
   
   async handleSubmit(e) {
     e.preventDefault();
-    this.postContent = !this.postContent ? "" : this.postContent.trim();
-    if (this.postContent.length === 0) return;
+    post_content = !post_content ? "" : post_content.trim();
+    if (post_content.length === 0) return;
 
-    is_pre_creating_new_thread = true;
+    is_pre_creating_new_post = true;
     this.renderPosts();
 
     try {
       const create_res = await dhisper_anon.kay4_create({
         thread: [],
-        content: this.postContent,
+        content: post_content,
         files: [],
         owners: [],
         metadata: [],
         authorization: { None: { subaccount: [] } },
       });
-      is_pre_creating_new_thread = false;
+      is_pre_creating_new_post = false;
       if ('Err' in create_res) {
         alert(`Create post error: ${JSON.stringify(create_res.Err)}`);
       } else {
@@ -302,15 +348,15 @@ class App {
         this.posts = [{ id, content, timestamp }];
         
         this.currentIndex = 0;
-        this.isComposingNewThread = false;
-        this.postContent = '';
-        this.charCount = 0;
+        is_composing_post = false;
+        post_content = '';
+        char_count = 0;
         this.assetType = 'None';
   
         this.startSlide(0, 'down');
       }
     } catch (e) {
-      is_pre_creating_new_thread = false;
+      is_pre_creating_new_post = false;
     }
   }
 
@@ -343,8 +389,8 @@ class App {
   setupScrollHandler() {
     window.addEventListener('wheel', (e) => {
       if (this.isAnimating) return;
-      if (this.isComposingNewThread) return;
-      if (this.isCommentOpen) return;
+      if (is_composing_post) return;
+      if (is_comments_open) return;
       if (this.isCommentFormOpen) return;
 
       if (e.deltaY > 0 && this.currentIndex < this.posts.length - 1) {
@@ -382,8 +428,8 @@ class App {
 
   handleCommentClick(post) {
     this.activeThread = post;
-    this.isCommentOpen = true;
-    this.renderPosts(); // re-render to show the comment UI
+    is_comments_open = true;
+    this.renderPosts();
     this.getComments();
   }
 
@@ -473,14 +519,14 @@ class App {
     }
   }
 
-  async createNewThread(e) {
+  async createNewPost(e) {
     e.preventDefault();
-    this.postContent = !this.postContent ? "" : this.postContent.trim();
-    if (this.postContent.length === 0) {
-      is_pre_creating_new_thread = false;
+    post_content = !post_content ? "" : post_content.trim();
+    if (post_content.length === 0) {
+      is_pre_creating_new_post = false;
       return this.renderPosts();
     };
-    is_pre_creating_new_thread = true;
+    is_pre_creating_new_post = true;
     this.renderPosts();
     if (dhisper_user == null || caller_principal == null) {
       return this.selectWallet(e);
@@ -510,9 +556,9 @@ class App {
     token_fee = Number(await token_fee_promise);
     base_cost = Number(selected_create_fee_rate.minimum_amount);
     max_content_size = Number(await max_content_size_promise);
-    extra_chars = this.postContent.length > max_content_size? (this.postContent.length - max_content_size) : 0;
+    extra_chars = post_content.length > max_content_size? (post_content.length - max_content_size) : 0;
     extra_cost = extra_chars > 0? extra_chars * Number(selected_create_fee_rate.additional_amount_numerator) / Number(selected_create_fee_rate.additional_byte_denominator) : 0;
-    console.log({ extra_chars, extra_cost, max_content_size });
+    // console.log({ extra_chars, extra_cost, max_content_size });
     token_name = await token_name_promise;
     token_symbol = await token_symbol_promise;
     token_power = 10 ** Number(await token_decimals_promise);
@@ -521,17 +567,17 @@ class App {
     is_checking_balance = false;
 
     post_cost = base_cost + token_fee + extra_cost;
-    token_approval_insufficient = token_approval.allowance < post_cost; 
+    token_approval_insufficient = token_approval.allowance < post_cost;
     token_approval_expired = token_approval.expires_at.length > 0 && token_approval.expires_at[0] < (BigInt(Date.now()) * BigInt(1000000));
     const require_approval = token_approval_insufficient || token_approval_expired;     
     
     const total_cost = require_approval? post_cost + token_fee : post_cost;
-    token_total = { amount: total_cost, msg: `Total posting fee: ${Number(total_cost) / token_power} ${token_symbol}` };
+    token_total = { amount: total_cost, msg: `Total posting fee: ${normalizeNumber(Number(total_cost) / token_power)} ${token_symbol}` };
     token_details = [
-      { amount: base_cost, msg: `Posting fee: ${Number(base_cost) / token_power} ${token_symbol}`, submsg: `helps keep Dhisper spam-free and ad-free for you`},
-      { amount: token_fee, msg: `Network fee: ${Number(token_fee) / token_power} ${token_symbol}`, submsg: `covers the small cost of recording your post`},
-      { amount: require_approval ? token_fee : BigInt(0), msg: `Payment Approval fee: ${Number(token_fee) / token_power} ${token_symbol}`, submsg: `allows Dhisper to deduct the posting fee automatically for you`},
-      { amount: extra_cost, msg: `Extra characters fee: ${Number(extra_cost) / token_power} ${token_symbol}`, submsg: `You exceed ${max_content_size} characters; either trim it or pay a little extra` },
+      { amount: base_cost, msg: `Posting fee: ${normalizeNumber(Number(base_cost) / token_power)} ${token_symbol}`, submsg: `helps keep Dhisper spam-free and ad-free for you`},
+      { amount: token_fee, msg: `Network fee: ${normalizeNumber(Number(token_fee) / token_power)} ${token_symbol}`, submsg: `covers the small cost of recording your post`},
+      { amount: require_approval ? token_fee : BigInt(0), msg: `Payment Approval fee: ${normalizeNumber(Number(token_fee) / token_power)} ${token_symbol}`, submsg: `allows Dhisper to deduct the posting fee automatically for you`},
+      { amount: extra_cost, msg: `Extra characters fee: ${normalizeNumber(Number(extra_cost) / token_power)} ${token_symbol}`, submsg: `You exceed ${max_content_size} characters; either trim it or pay a little extra` },
     ];
     if (!is_seeing_cost) {
       is_seeing_cost = true;
@@ -543,17 +589,16 @@ class App {
     };
     is_waiting_balance = false;
     if (require_approval) {
-      token_approval_total = { amount : post_cost, msg: `Allow Dhisper to use ${Number(post_cost) / token_power} ${token_symbol}` }
       is_waiting_approval = true;
       return this.renderPosts();
     } else is_seeing_cost = false;
 
-    is_pre_creating_new_thread = true;
-    is_creating_new_thread = true;
+    is_pre_creating_new_post = true;
+    is_creating_new_post = true;
     this.renderPosts();
     const create_post_res = await dhisper_user.kay4_create({
-      thread: [],
-      content: this.postContent,
+      thread: this.activeThread ? [this.activeThread.id] : [],
+      content: post_content,
       files: [],
       owners: [],
       metadata: [],
@@ -563,10 +608,10 @@ class App {
         fee: [BigInt(base_cost + extra_cost)]
       } }
     });
-    is_creating_new_thread = false;
-    is_pre_creating_new_thread = false;
-    this.isComposingNewThread = 'Err' in create_post_res;
-    if (this.isComposingNewThread) {
+    is_creating_new_post = false;
+    is_pre_creating_new_post = false;
+    is_composing_post = 'Err' in create_post_res;
+    if (is_composing_post) {
       // todo: create error popup
       console.error('create thread err', create_post_res.Err);
     } else {
@@ -614,8 +659,8 @@ class App {
     this.isSelectingWallet = false;
     this.isConnectingWallet = false;
     
-    if (is_pre_creating_new_thread) {
-      this.createNewThread(e);
+    if (is_pre_creating_new_post) {
+      this.createNewPost(e);
     };
   }
 
@@ -640,8 +685,8 @@ class App {
       console.error('approve err', approve_res.Err);
       // JSON.stringify(approve_res.Err)
     } else is_waiting_approval = false;
-    if (is_pre_creating_new_thread) {
-      this.createNewThread(e);
+    if (is_pre_creating_new_post) {
+      this.createNewPost(e);
     } else this.renderPosts();
   }
 
@@ -677,32 +722,59 @@ class App {
           `
         : null}
     `;
-    const create_new_thread_btn = html`<button class="create-post-btn" @click=${() => { 
-      this.isComposingNewThread = true; 
+    
+    const replies_pane = this.posts.length > 0 && is_comments_open && this.activeThread
+    ? html`
+        <div class="comment-panel slide-in">
+          <button class="close-btn" @click=${() => {
+            const panel = document.querySelector('.comment-panel');
+            if (panel) {
+              panel.classList.remove('slide-in');
+              panel.classList.add('slide-out');
+              setTimeout(() => {
+                is_comments_open = false;
+                this.activeThread = null;
+                this.renderPosts();
+              }, 500); // matches slideOut animation duration
+              this.closeCommentForm();
+            }
+          }}>✕</button>
+  
+          <div class="comment-list">
+            <div class="thread-post">
+              <div class="meta">#${this.activeThread.id} • ${this.activeThread.timestamp ? timeAgo(this.activeThread.timestamp) : "Unknown time"}</div>
+              <div class="content">${this.activeThread.content}</div>
+            </div>
+            ${this.threadComments.map(comment => html`
+              <div class="comment">
+                <div class="meta">#${comment.id}${comment.timestamp ? ` • ${timeAgo(comment.timestamp)}` : ''}</div>
+                <div class="content">${comment.content}</div>
+              </div>
+            `)}
+          </div>
+        </div>
+      ` : null;
+    const create_new_post_btn = html`<button class="create-post-btn" @click=${() => { 
+      is_composing_post = true; 
       this.renderPosts();
     }}>+</button>`;
-    // todo: remove the char count limit red?
     const create_new_thread_form = html`
-      ${this.isComposingNewThread
-      ? html`<div class="backdrop" @click=${() => { 
-          this.isComposingNewThread = false; 
+      ${is_composing_post
+      ? html`<div class="compose-backdrop" @click=${() => { 
+          is_composing_post = false; 
           this.renderPosts(); 
-        }}></div>`
-      : null}
-      <div class="compose-drawer ${this.isComposingNewThread ? 'open' : ''}">
-        <p><strong>Create New Thread</strong></p>
+        }}></div>` : null}
+      <div class="compose-drawer ${is_composing_post ? 'open' : ''}">
+        <p><strong>${is_comments_open ? 'Add a Reply' : 'Create New Thread'}</strong></p>
         <label class="field">
-          <input type="text" placeholder="What's on your mind?" 
-                @input=${(e) => this.updateCharCount(e)} 
-                .value=${this.postContent || ''}
-                required />
-          <span class="char-count ${this.charCount >= max_content_size ? 'limit' : ''}">
-            ${this.charCount}/${max_content_size}
-          </span>
+          <input type="text" placeholder="${is_comments_open ? 'What do you think about the thread?' : "What's on your mind?"}"
+            @input=${(e) => this.updateCharCount(e)} 
+            .value=${post_content || ''}/>
+          <span class="char-count">${char_count}</span>
         </label>
 
-        <button class="send-btn" ?disabled=${is_pre_creating_new_thread} @click=${(e) => this.createNewThread(e)}>
-          ${is_pre_creating_new_thread
+        <button class="send-btn" ?disabled=${is_pre_creating_new_post} @click=${(e) => this.createNewPost(e)}>
+          ${is_pre_creating_new_post
             ? html`<span class="spinner"></span> Posting...`
             : html`➤ Post`}
         </button>
@@ -728,124 +800,6 @@ class App {
         </button>
       </div>
     `;
-    const replies_pane = this.posts.length > 0 && this.isCommentOpen && this.activeThread
-    ? html`
-        <div class="comment-panel slide-in">
-          <button class="close-btn" @click=${() => {
-            const panel = document.querySelector('.comment-panel');
-            if (panel) {
-              panel.classList.remove('slide-in');
-              panel.classList.add('slide-out');
-              setTimeout(() => {
-                this.isCommentOpen = false;
-                this.activeThread = null;
-                this.renderPosts();
-              }, 500); // matches slideOut animation duration
-              this.closeCommentForm();
-            }
-          }}>✕</button>
-  
-          <div class="comment-list">
-            <div class="thread-post">
-              <div class="meta">#${this.activeThread.id} • ${this.activeThread.timestamp ? timeAgo(this.activeThread.timestamp) : "Unknown time"}</div>
-              <div class="content">${this.activeThread.content}</div>
-            </div>
-  
-            ${this.threadComments.map(comment => html`
-              <div class="comment">
-                <div class="meta">#${comment.id} • ${comment.timestamp ? timeAgo(comment.timestamp) : "Unknown time"}</div>
-                <div class="content">${comment.content}</div>
-              </div>
-            `)}
-          </div>
-  
-          <button class="add-comment-btn" @click=${() => {
-            this.isCommentFormOpen = true;
-            this.renderPosts();
-          }}>
-            ➕ Add a Comment
-          </button>
-        </div>
-      `
-    : null;
-    const add_reply_form = replies_pane && this.isCommentFormOpen
-    ? html`
-        <div
-          class="comment-form-overlay"
-          @click=${(e) => {
-            if (e.target.classList.contains('comment-form-overlay')) {
-              this.closeCommentForm();
-            }
-          }}
-        >
-          <div class="comment-form slide-up">
-            <div class="form-row">
-              <button class="comment-close-btn" @click=${() => this.closeCommentForm()}>✕</button>
-              <input
-                type="text"
-                placeholder="Write your comment..."
-                .value=${this.commentInput}
-                @input=${(e) => {
-                  this.commentInput = e.target.value;
-                  this.commentCharCount = e.target.value.length;
-                  this.renderPosts();
-                }}
-              />
-              <div class="char-count ${this.commentCharCount >= max_content_size ? 'limit' : ''}">
-                ${this.commentCharCount}/${max_content_size}
-              </div>
-            </div>
-    
-            <div class="form-row">
-              <select
-                .value=${this.commentAssetType}
-                @change=${(e) => {
-                  this.commentAssetType = e.target.value;
-                  this.renderPosts();
-                }}
-              >
-                <option value="None">None</option>
-                <option value="ICRC_1">ICRC_1</option>
-                <option value="ICRC_2">ICRC_2</option>
-              </select>
-            </div>
-    
-            <div class="form-row">
-              <input
-                type="text"
-                placeholder="Subaccount (hex, optional)"
-                .value=${this.commentSubaccount}
-                @input=${(e) => {
-                  this.commentSubaccount = e.target.value;
-                }}
-              />
-            </div>
-    
-            ${this.commentAssetType === 'ICRC_1'
-              ? html`<div class="info-label">Your balance: 1.5 ICP, Token minimum: 1 ICP</div>`
-              : this.commentAssetType === 'ICRC_2'
-              ? html`
-                  <div class="form-row">
-                    <select
-                      .value=${this.commentToken}
-                      @change=${(e) => {
-                        this.commentToken = e.target.value;
-                      }}
-                    >
-                      <option value="ICP">Internet Computer (ICP)</option>
-                      <option value="ckBTC">ckBTC (ckBTC)</option>
-                    </select>
-                  </div>
-                  <div class="info-label">Fee: 0</div>
-                `
-              : null}
-    
-            <div class="form-row">
-              <button class="send-btn" @click=${() => this.handleCommentSend()}>🚀 Send</button>
-            </div>
-          </div>
-        </div>
-      ` : null;
 
   //   const token_selectors = html`
   //   ${this.isSelectingToken
@@ -868,7 +822,7 @@ class App {
       ${is_seeing_cost
       ? html`<div class="cost-backdrop" @click=${() => { 
           is_seeing_cost = false;
-          is_pre_creating_new_thread = false;
+          is_pre_creating_new_post = false;
           this.renderPosts(); 
         }}></div>`
       : null}
@@ -897,7 +851,7 @@ class App {
         </p>
         <button class="send-btn" ?disabled=${is_paying} @click=${(e) => {
           is_paying = true;
-          this.createNewThread(e);
+          this.createNewPost(e);
         }}>${is_paying ? html`<span class="spinner"></span> Paying...`
           : html`Pay`}</button>
       </div>
@@ -932,9 +886,9 @@ class App {
       <p>
         <strong>Oops, you don't have enough ${token_symbol}</strong><br>
         <br><small>${token_total.msg}</small>
-        <br><small>Your balance: ${is_checking_balance ? html`<span class="spinner"></span>` : (token_balance / token_power)} ${token_symbol}</small>
+        <br><small>Your balance: ${is_checking_balance ? html`<span class="spinner"></span>` : normalizeNumber(token_balance / token_power)} ${token_symbol}</small>
         <br>
-        <br>You need to <strong>send ${is_checking_balance ? html`<span class="spinner"></span>` : ((token_total.amount - token_balance) / token_power)} ${token_symbol}</strong> to one of your ${token_symbol} addresses:<br>
+        <br>You need to <strong>send ${is_checking_balance ? html`<span class="spinner"></span>` : normalizeNumber((token_total.amount - token_balance) / token_power)} ${token_symbol}</strong> to one of your ${token_symbol} addresses:<br>
         <br><strong>• Principal</strong>: <button class="copy-btn ${caller_principal_copied ? "copied" : caller_principal_copy_failed ? 'copy-failed' : ''}" @click=${async (e) => { 
           e.preventDefault();
           try {
@@ -989,7 +943,7 @@ class App {
         <br>
         <br><small><small>No rush, we'll be right here waiting for your top-up.</small></small>
       </p>
-      <button class="send-btn" ?disabled=${is_checking_balance} @click=${(e) => this.createNewThread(e)}>
+      <button class="send-btn" ?disabled=${is_checking_balance} @click=${(e) => this.createNewPost(e)}>
         ${is_checking_balance
           ? html`<span class="spinner"></span> Checking...`
           : html`I have sent`}
@@ -1058,12 +1012,9 @@ class App {
     render(html`
       <div class="post-wrapper">
         ${threads_pane}
-        ${create_new_thread_btn}
-        ${create_new_thread_form}
-
         ${replies_pane}
-        ${add_reply_form}
-        
+        ${create_new_post_btn}
+        ${create_new_thread_form}        
         ${wallet_selectors}
         ${cost_and_reasons}
         ${token_balance_waiter}
