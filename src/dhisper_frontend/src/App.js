@@ -31,7 +31,7 @@ let selected_delete_token_canister = null;
 let selected_delete_fee_rate = null;
 
 let is_comments_open = false;
-let is_pre_creating_new_post = false;
+let is_posting = false;
 let is_creating_new_post = false;
 let is_waiting_balance = false;
 let is_viewing_token_details = false;
@@ -165,8 +165,19 @@ Uint8Array.prototype.toJSON = function () {
   return blob2hex(this) // Array.from(this).toString();
 }
 
+/* brightest to darkest
+To sort colors from brightest to darkest, we can approximate brightness using the perceived luminance formula:
+
+Brightness=0.299×R+0.587×G+0.114×B
+#fbb03b
+#29abe2
+#f15a24
+#ed1e79
+#522785
+*/
+
 /*
-  use these colors
+  todo: use these colors
 #3b00b9
 #1e005d
 
@@ -227,43 +238,52 @@ function timeAgo(date) {
 }
 
 async function prepareTokens() {
-  if (create_fee_rates == null || delete_fee_rates == null) {
-    await Promise.all([
-      new Promise((resolve) => {(async () => {
-        create_fee_rates = convertTyped({ Map : await dhisper_anon.kay4_create_fee_rates() });
-        const standards = Object.keys(create_fee_rates);
-        if (standards.length == 1) {
-          selected_create_fee_token_standard = standards[0];
-        }
-        const token_map = create_fee_rates[selected_create_fee_token_standard];
-        if (token_map.size == 1) {
-          const [token_canister_id] = token_map.keys();
-          selected_create_fee_token_canister = token_canister_id;
-          selected_create_fee_rate = token_map.get(token_canister_id);
-        };
-        resolve();
-      })()}),
-      new Promise((resolve) => {(async () => {
-        delete_fee_rates = convertTyped({ Map : await dhisper_anon.kay4_delete_fee_rates() });
-        const standards = Object.keys(delete_fee_rates);
-        if (standards.length == 1) {
-          selected_delete_fee_standard = standards[0];
-        }
-        const token_map = delete_fee_rates[selected_delete_fee_standard];
-        if (token_map.size == 1) {
-          const [token_canister_id] = token_map.keys();
-          selected_delete_token_canister = token_canister_id;
-          selected_delete_fee_rate = token_map.get(token_canister_id);
-        };
-        resolve();
-      })()}),
-    ]);
+  if (
+    create_fee_rates == null
+    // || delete_fee_rates == null
+  ) {
+    try {
+      await Promise.all([
+        new Promise((resolve, reject) => {(async () => {
+          create_fee_rates = convertTyped({ Map : await dhisper_anon.kay4_create_fee_rates() });
+          const standards = Object.keys(create_fee_rates);
+          if (standards.length == 1) {
+            selected_create_fee_token_standard = standards[0];
+          }
+          const token_map = create_fee_rates[selected_create_fee_token_standard];
+          if (token_map.size == 1) {
+            const [token_canister_id] = token_map.keys();
+            selected_create_fee_token_canister = token_canister_id;
+            selected_create_fee_rate = token_map.get(token_canister_id);
+          };
+          resolve();
+        })()}),
+        // new Promise((resolve) => {(async () => {
+        //     delete_fee_rates = convertTyped({ Map : await dhisper_anon.kay4_delete_fee_rates() });
+        //     const standards = Object.keys(delete_fee_rates);
+        //     if (standards.length == 1) {
+        //       selected_delete_fee_standard = standards[0];
+        //     }
+        //     const token_map = delete_fee_rates[selected_delete_fee_standard];
+        //     if (token_map.size == 1) {
+        //       const [token_canister_id] = token_map.keys();
+        //       selected_delete_token_canister = token_canister_id;
+        //       selected_delete_fee_rate = token_map.get(token_canister_id);
+        //     };
+        //     resolve();
+        // })()}),
+      ]);
+      console.log({ 
+        // create_fee_rates, 
+        selected_create_fee_standard: selected_create_fee_token_standard, selected_create_token_canister : selected_create_fee_token_canister.toText(), selected_create_fee_rate, 
+        // // delete_fee_rates, 
+        // selected_delete_fee_standard, selected_delete_token_canister : selected_delete_token_canister.toText(), selected_delete_fee_rate 
+      });
+    } catch (err) {
+      this.catchPopup("Error while Fetching Fee Rates", err);
+      this.renderPosts();
+    }
   };
-  console.log({ 
-    // create_fee_rates, 
-    selected_create_fee_standard: selected_create_fee_token_standard, selected_create_token_canister : selected_create_fee_token_canister.toText(), selected_create_fee_rate, 
-    // delete_fee_rates, 
-    selected_delete_fee_standard, selected_delete_token_canister : selected_delete_token_canister.toText(), selected_delete_fee_rate });
 }
 
 class App {
@@ -280,18 +300,12 @@ class App {
     this.isRequireApproval = false;
     this.isApproving = false;
     
-    this.assetType = "None";
     this.root = document.getElementById('root');
     this.background = this.getRandomGradient();
     
     this.activeThread = null;
     this.threadComments = [];
-    this.isCommentFormOpen = false;
     this.commentInput = "";
-    this.commentCharCount = 0;
-    this.commentAssetType = "None";
-    this.commentSubaccount = "";
-    this.commentToken = "ICP";
 
     this.setupScrollHandler();
     this.renderPosts();
@@ -304,85 +318,39 @@ class App {
     this.renderPosts();
   }
   
-  updateAssetType(e) {
-    this.assetType = e.target.value;
-    this.renderPosts();
-  }
-  
-  async handleSubmit(e) {
-    e.preventDefault();
-    post_content = !post_content ? "" : post_content.trim();
-    if (post_content.length === 0) return;
-
-    is_pre_creating_new_post = true;
-    this.renderPosts();
-
-    try {
-      const create_res = await dhisper_anon.kay4_create({
-        thread: [],
-        content: post_content,
-        files: [],
-        owners: [],
-        metadata: [],
-        authorization: { None: { subaccount: [] } },
-      });
-      is_pre_creating_new_post = false;
-      if ('Err' in create_res) {
-        alert(`Create post error: ${JSON.stringify(create_res.Err)}`);
-      } else {
-        const id = create_res.Ok;
-        let content = '';
-        let timestamp = '';
-        await Promise.all([
-          new Promise((resolve) => {(async () => {
-            const contents = await dhisper_anon.kay4_contents_of([id]);
-            content = contents[0].length > 0? contents[0][0] : "";
-            resolve();
-          })()}),
-          new Promise((resolve) => {(async () => {
-            const timestamps = await dhisper_anon.kay4_timestamps_of([id]);
-            timestamp = timestamps[0].length > 0? new Date(Number(timestamps[0][0]) / 1000000) : null;
-            resolve();
-          })()}),
-        ]);
-        this.posts = [{ id, content, timestamp }];
-        
-        this.currentIndex = 0;
-        is_composing_post = false;
-        post_content = '';
-        char_count = 0;
-        this.assetType = 'None';
-  
-        this.startSlide(0, 'down');
-      }
-    } catch (e) {
-      is_pre_creating_new_post = false;
-    }
-  }
-
   async getPosts() {
     let post_ids = [];
-    if (this.posts.length > 0) {
-      const last_post_id = this.posts[this.posts.length - 1].id;
-      post_ids = await dhisper_anon.kay4_threads([last_post_id], []); 
-    } else post_ids = await dhisper_anon.kay4_threads([], []);
+    try {
+      if (this.posts.length > 0) {
+        const last_post_id = this.posts[this.posts.length - 1].id;
+        post_ids = await dhisper_anon.kay4_threads([last_post_id], []); 
+      } else post_ids = await dhisper_anon.kay4_threads([], []);
+    } catch (err) {
+      this.showPopup("Error while Fetching Post IDs");
+    }
+
+    if (post_ids.length == 0) return this.renderPosts();
 
     const posts = [];
     for (const id of post_ids) posts.push({ id });
-    if (posts.length == 0) return;
-    await Promise.all([
-      new Promise((resolve) => {(async () => {
-        const contents = await dhisper_anon.kay4_contents_of(post_ids);
-        for (const i in contents) posts[i]['content'] = contents[i].length > 0? contents[i][0] : "";
-        resolve();
-      })()}),
-      new Promise((resolve) => {(async () => {
-        const timestamps = await dhisper_anon.kay4_timestamps_of(post_ids);
-        for (const i in timestamps) posts[i]['timestamp'] = timestamps[i].length > 0? new Date(Number(timestamps[i][0]) / 1000000) : null;
-        resolve();
-      })()})
-    ]);
-    for (const post of posts) this.posts.push(post);
+
+    try {
+      await Promise.all([
+        new Promise((resolve) => {(async () => {
+          const contents = await dhisper_anon.kay4_contents_of(post_ids);
+          for (const i in contents) posts[i]['content'] = contents[i].length > 0? contents[i][0] : "";
+          resolve();
+        })()}),
+        new Promise((resolve) => {(async () => {
+          const timestamps = await dhisper_anon.kay4_timestamps_of(post_ids);
+          for (const i in timestamps) posts[i]['timestamp'] = timestamps[i].length > 0? new Date(Number(timestamps[i][0]) / 1000000) : null;
+          resolve();
+        })()})
+      ]);
+      for (const post of posts) this.posts.push(post);
+    } catch (err) {
+      this.catchPopup("Error while Building Posts", err);
+    }
     this.renderPosts();
   }
 
@@ -391,7 +359,6 @@ class App {
       if (this.isAnimating) return;
       if (is_composing_post) return;
       if (is_comments_open) return;
-      if (this.isCommentFormOpen) return;
 
       if (e.deltaY > 0 && this.currentIndex < this.posts.length - 1) {
         this.startSlide(this.currentIndex + 1, 'up');
@@ -441,92 +408,46 @@ class App {
     while (true) {
       const last = replies.length - 1;
       const prev = replies.length == 0? [] : [replies[last].id];
-      const reply_ids = await dhisper_anon.kay4_replies_of(thread_id, prev, []);
-      if (reply_ids.length == 0) break;
-      for (const id of reply_ids) replies.push({ id });
-      console.log({ replies });
-      await Promise.all([
-        new Promise((resolve) => {(async () => {
-          const contents = await dhisper_anon.kay4_contents_of(reply_ids);
-          for (const i in contents) {
-            replies[content_count + +i]['content'] = contents[i].length > 0? contents[i][0] : "";
-          };
-          content_count += contents.length;
-          resolve();
-        })()}),
-        new Promise((resolve) => {(async () => {
-          const timestamps = await dhisper_anon.kay4_timestamps_of(reply_ids);
-          for (const i in timestamps) {
-            replies[timestamp_count + +i]['timestamp'] = timestamps[i].length > 0? new Date(Number(timestamps[i][0]) / 1000000) : null;
-          };
-          timestamp_count += timestamps.length;
-          resolve();
-        })()})
-      ]);
+      try {
+        const reply_ids = await dhisper_anon.kay4_replies_of(thread_id, prev, []);
+        if (reply_ids.length == 0) break;
+        for (const id of reply_ids) replies.push({ id });
+        console.log({ replies });
+        await Promise.all([
+          new Promise((resolve) => {(async () => {
+            const contents = await dhisper_anon.kay4_contents_of(reply_ids);
+            for (const i in contents) {
+              replies[content_count + +i]['content'] = contents[i].length > 0? contents[i][0] : "";
+            };
+            content_count += contents.length;
+            resolve();
+          })()}),
+          new Promise((resolve) => {(async () => {
+            const timestamps = await dhisper_anon.kay4_timestamps_of(reply_ids);
+            for (const i in timestamps) {
+              replies[timestamp_count + +i]['timestamp'] = timestamps[i].length > 0? new Date(Number(timestamps[i][0]) / 1000000) : null;
+            };
+            timestamp_count += timestamps.length;
+            resolve();
+          })()})
+        ]);
+      } catch (err) {
+        this.catchPopup("Error while Fetching Comments", err);
+        return this.renderPosts();
+      }
     }
     this.threadComments = replies;
     this.renderPosts();
-  }
-
-  closeCommentForm() {
-    const form = document.querySelector('.comment-form');
-    if (form) {
-      form.classList.remove('slide-up');
-      form.classList.add('slide-down');
-      setTimeout(() => {
-        this.isCommentFormOpen = false;
-        this.renderPosts();
-      }, 400); // must match animation duration
-    }
-  }
-
-  async handleCommentSend() {
-    this.commentInput = !this.commentInput ? "" : this.commentInput.trim();
-    if (this.commentInput.length === 0) return;
-
-    const comment_res = await dhisper_anon.kay4_create({
-      thread: [this.activeThread.id],
-      content: this.commentInput,
-      files: [],
-      owners: [],
-      metadata: [],
-      authorization: { None: { subaccount: [] } },
-    });
-    if ('Err' in comment_res) {
-      alert(`Send comment error: ${JSON.stringify(comment_res.Err)}`);
-    } else {
-      const id = comment_res.Ok;
-      let content = '';
-      let timestamp = '';
-      await Promise.all([
-        new Promise((resolve) => {(async () => {
-          const contents = await dhisper_anon.kay4_contents_of([id]);
-          content = contents[0].length > 0? contents[0][0] : "";
-          resolve();
-        })()}),
-        new Promise((resolve) => {(async () => {
-          const timestamps = await dhisper_anon.kay4_timestamps_of([id]);
-          timestamp = timestamps[0].length > 0? new Date(Number(timestamps[0][0]) / 1000000) : null;
-          resolve();
-        })()}),
-      ]);
-      this.commentInput = "";
-      this.commentCharCount = 0;
-      this.isCommentFormOpen = false;
-      this.threadComments.push({ id, content, timestamp });
-      this.commentAssetType = 'None';
-      this.renderPosts();
-    }
   }
 
   async createNewPost(e) {
     e.preventDefault();
     post_content = !post_content ? "" : post_content.trim();
     if (post_content.length === 0) {
-      is_pre_creating_new_post = false;
+      is_posting = false;
       return this.renderPosts();
     };
-    is_pre_creating_new_post = true;
+    is_posting = true;
     this.renderPosts();
     if (caller_principal == null) {
       return this.selectWallet(e);
@@ -539,110 +460,164 @@ class App {
       // return this.selectTokenCanister();
     };
     
-    const token_anon = genToken(selected_create_fee_token_canister);
-    const token_fee_promise = token_anon.icrc1_fee();
-    const token_name_promise = token_anon.icrc1_name();
-    const token_symbol_promise = token_anon.icrc1_symbol();
-    const token_decimals_promise = token_anon.icrc1_decimals();
-    const max_content_size_promise = dhisper_anon.kay4_max_content_size();
-    const token_balance_promise = token_anon.icrc1_balance_of({ owner : caller_principal, subaccount : [] });
-    const token_approval_promise = token_anon.icrc2_allowance({
-      spender : { owner : Principal.fromText(dhisper_id), subaccount : [] },
-      account : { owner : caller_principal, subaccount : [] }
-    });
-    is_checking_balance = true;
-    this.renderPosts();
-    token_id = selected_create_fee_token_canister;
-    token_fee = Number(await token_fee_promise);
-    base_cost = Number(selected_create_fee_rate.minimum_amount);
-    max_content_size = Number(await max_content_size_promise);
-    extra_chars = post_content.length > max_content_size? (post_content.length - max_content_size) : 0;
-    extra_cost = extra_chars > 0? extra_chars * Number(selected_create_fee_rate.additional_amount_numerator) / Number(selected_create_fee_rate.additional_byte_denominator) : 0;
-    // console.log({ extra_chars, extra_cost, max_content_size });
-    token_name = await token_name_promise;
-    token_symbol = await token_symbol_promise;
-    token_power = 10 ** Number(await token_decimals_promise);
-    token_balance = Number(await token_balance_promise);
-    token_approval = await token_approval_promise;
-    is_checking_balance = false;
-
-    post_cost = base_cost + token_fee + extra_cost;
-    token_approval_insufficient = token_approval.allowance < post_cost;
-    token_approval_expired = token_approval.expires_at.length > 0 && token_approval.expires_at[0] < (BigInt(Date.now()) * BigInt(1000000));
-    const require_approval = token_approval_insufficient || token_approval_expired;     
-    
-    const total_cost = require_approval? post_cost + token_fee : post_cost;
-    token_total = { amount: total_cost, msg: `Total posting fee: ${normalizeNumber(Number(total_cost) / token_power)} ${token_symbol}` };
-    token_details = [
-      { amount: base_cost, msg: `Posting fee: ${normalizeNumber(Number(base_cost) / token_power)} ${token_symbol}`, submsg: `helps keep Dhisper spam-free and ad-free for you`},
-      { amount: token_fee, msg: `Network fee: ${normalizeNumber(Number(token_fee) / token_power)} ${token_symbol}`, submsg: `covers the small cost of recording your post`},
-      { amount: require_approval ? token_fee : BigInt(0), msg: `Payment Approval fee: ${normalizeNumber(Number(token_fee) / token_power)} ${token_symbol}`, submsg: `allows Dhisper to deduct the posting fee automatically for you`},
-      { amount: extra_cost, msg: `Extra characters fee: ${normalizeNumber(Number(extra_cost) / token_power)} ${token_symbol}`, submsg: `You exceed ${max_content_size} characters; either trim it or pay a little extra` },
-    ];
-    if (!is_seeing_cost) {
-      is_seeing_cost = true;
-      return this.renderPosts();
-    }
-    if (token_balance < total_cost) {
-      is_waiting_balance = true;
-      return this.renderPosts();
-    };
-    is_waiting_balance = false;
-    if (require_approval) {
-      is_waiting_approval = true;
-      return this.renderPosts();
-    } else is_seeing_cost = false;
-
-    is_pre_creating_new_post = true;
-    is_creating_new_post = true;
-    this.renderPosts();
-    const dhisper_user = genDhisper(dhisper_id, { agent: caller_agent });
-    const create_post_res = await dhisper_user.kay4_create({
-      thread: this.activeThread ? [this.activeThread.id] : [],
-      content: post_content,
-      files: [],
-      owners: [],
-      metadata: [],
-      authorization: { ICRC_2: {
-        subaccount: [],
-        canister_id: selected_create_fee_token_canister,
-        fee: [BigInt(base_cost + extra_cost)]
-      } }
-    });
-    is_creating_new_post = false;
-    is_pre_creating_new_post = false;
-    is_paying = false;
-    is_composing_post = 'Err' in create_post_res;
-    if (is_composing_post) {
-      const err_obj = create_post_res.Err;
-      console.error('create thread err', err_obj);
-      let title, subtitle;
-      for (const err_key in err_obj) {
-        title = err_key;
-        subtitle = JSON.stringify(err_obj[err_key]);
-        break;
+    try {
+      const token_anon = genToken(selected_create_fee_token_canister);
+      const token_fee_promise = token_anon.icrc1_fee();
+      const token_name_promise = token_anon.icrc1_name();
+      const token_symbol_promise = token_anon.icrc1_symbol();
+      const token_decimals_promise = token_anon.icrc1_decimals();
+      const max_content_size_promise = dhisper_anon.kay4_max_content_size();
+      const token_balance_promise = token_anon.icrc1_balance_of({ owner : caller_principal, subaccount : [] });
+      const token_approval_promise = token_anon.icrc2_allowance({
+        spender : { owner : Principal.fromText(dhisper_id), subaccount : [] },
+        account : { owner : caller_principal, subaccount : [] }
+      });
+      is_checking_balance = true;
+      this.renderPosts();
+      token_id = selected_create_fee_token_canister;
+      token_fee = Number(await token_fee_promise);
+      base_cost = Number(selected_create_fee_rate.minimum_amount);
+      max_content_size = Number(await max_content_size_promise);
+      extra_chars = post_content.length > max_content_size? (post_content.length - max_content_size) : 0;
+      extra_cost = extra_chars > 0? extra_chars * Number(selected_create_fee_rate.additional_amount_numerator) / Number(selected_create_fee_rate.additional_byte_denominator) : 0;
+      // console.log({ extra_chars, extra_cost, max_content_size });
+      token_name = await token_name_promise;
+      token_symbol = await token_symbol_promise;
+      token_power = 10 ** Number(await token_decimals_promise);
+      token_balance = Number(await token_balance_promise);
+      token_approval = await token_approval_promise;
+      is_checking_balance = false;
+  
+      post_cost = base_cost + token_fee + extra_cost;
+      token_approval_insufficient = token_approval.allowance < post_cost;
+      token_approval_expired = token_approval.expires_at.length > 0 && token_approval.expires_at[0] < (BigInt(Date.now()) * BigInt(1000000));
+      const require_approval = token_approval_insufficient || token_approval_expired;     
+      
+      const total_cost = require_approval? post_cost + token_fee : post_cost;
+      token_total = { amount: total_cost, msg: `Total posting fee: ${normalizeNumber(Number(total_cost) / token_power)} ${token_symbol}` };
+      token_details = [
+        { amount: base_cost, msg: `Posting fee: ${normalizeNumber(Number(base_cost) / token_power)} ${token_symbol}`, submsg: `helps keep Dhisper spam-free and ad-free for you`},
+        { amount: token_fee, msg: `Network fee: ${normalizeNumber(Number(token_fee) / token_power)} ${token_symbol}`, submsg: `covers the small cost of recording your post`},
+        { amount: require_approval ? token_fee : BigInt(0), msg: `Payment Approval fee: ${normalizeNumber(Number(token_fee) / token_power)} ${token_symbol}`, submsg: `allows Dhisper to deduct the posting fee automatically for you`},
+        { amount: extra_cost, msg: `Extra characters fee: ${normalizeNumber(Number(extra_cost) / token_power)} ${token_symbol}`, submsg: `You exceed ${max_content_size} characters; either trim it or pay a little extra` },
+      ];
+      if (!is_seeing_cost) {
+        is_seeing_cost = true;
+        return this.renderPosts();
       }
-      popup_html = html`<p>
-        <strong>${title}</strong><br>
-        <small>${subtitle}</small>
-      </p>
-      <button class="view-btn" @click=${(e) => {
-        e.preventDefault();
-        const popup_exist = document.querySelector('.popup');
-        if (popup_exist) {
-          popup_exist.classList.remove('in');
-          popup_exist.classList.add('out');
-          setTimeout(() => {
-            popup_html = null;
-            this.renderPosts();
-          }, 300);
+      if (token_balance < total_cost) {
+        is_waiting_balance = true;
+        return this.renderPosts();
+      };
+      is_waiting_balance = false;
+      if (require_approval) {
+        is_waiting_approval = true;
+        return this.renderPosts();
+      } else is_seeing_cost = false;
+  
+      is_posting = true;
+      is_creating_new_post = true;
+      this.renderPosts();
+      const dhisper_user = genDhisper(dhisper_id, { agent: caller_agent });
+      const create_post_res = await dhisper_user.kay4_create({
+        thread: this.activeThread ? [this.activeThread.id] : [],
+        content: post_content,
+        files: [],
+        owners: [],
+        metadata: [],
+        authorization: { ICRC_2: {
+          subaccount: [],
+          canister_id: selected_create_fee_token_canister,
+          fee: [BigInt(base_cost + extra_cost)]
+        } }
+      });
+      is_creating_new_post = false;
+      is_posting = false;
+      is_paying = false;
+      is_composing_post = 'Err' in create_post_res;
+      if (is_composing_post) {
+        this.errPopup("Create Post Error", create_post_res.Err);
+      } else {
+        // todo: track background process instead of this
+        if (this.activeThread) {
+          this.getComments();
+        } else {
+          try {
+            const id = create_post_res.Ok;
+            let content = '';
+            let timestamp = '';
+            await Promise.all([
+              new Promise((resolve) => {(async () => {
+                const contents = await dhisper_anon.kay4_contents_of([id]);
+                content = contents[0].length > 0? contents[0][0] : "";
+                resolve();
+              })()}),
+              new Promise((resolve) => {(async () => {
+                const timestamps = await dhisper_anon.kay4_timestamps_of([id]);
+                timestamp = timestamps[0].length > 0? new Date(Number(timestamps[0][0]) / 1000000) : null;
+                resolve();
+              })()}),
+            ]);
+            this.posts = [{ id, content, timestamp }];
+            this.currentIndex = 0;
+            post_content = '';
+            char_count = 0;
+            this.startSlide(0, 'down');
+          } catch (err) {
+            this.catchPopup("Error while Fetching Created Post", err);
+          }
         }
-      }}>Close</button>`;
-    } else {
-      // todo: create ok popup
-      console.log('create thread ok', create_post_res.Ok);
+      }
+    } catch (err) {
+      this.catchPopup("Error while Create Post", err);
+      if (is_posting) {
+        if (is_checking_balance) {
+          is_checking_balance = false;
+        } else if (is_paying) {
+          is_paying = false;
+        } else is_posting = false; 
+      }
     }
     this.renderPosts();
+  }
+
+  errPopup(title, err) {
+    for (const err_key in err) {
+      subtitle = JSON.stringify(err[err_key], null, 2);
+      return this.showPopup(err_key, subtitle)
+    }
+    this.showPopup(title);
+    console.error(title, err);
+  }
+
+  catchPopup(title, e) {
+    if (e instanceof Error) {
+      this.showPopup(e.name, e.message);
+    } else {
+      this.showPopup(title);
+      console.error(title, e);
+    }
+  }
+
+  showPopup(title = 'Error', subtitle = 'Check console', buttons = [{ 
+    label: 'Close', 
+    click: (e) => {
+      e.preventDefault();
+      const popup_exist = document.querySelector('.popup');
+      if (popup_exist) {
+        popup_exist.classList.remove('in');
+        popup_exist.classList.add('out');
+        setTimeout(() => {
+          popup_html = null;
+          this.renderPosts();
+        }, 300);
+      }
+    }}]) {
+    popup_html = html`<p>
+      <strong>${title}</strong><br>
+      <small>${subtitle}</small>
+    </p>
+    ${buttons.map(v => html`<button class="view-btn" @click=${v.click}>${v.label}</button>`)}`;
   }
 
   viewTokenDetails(e) {
@@ -661,7 +636,13 @@ class App {
     e.preventDefault();
     this.isConnectingWallet = true;
     this.renderPosts();
-    if (internet_identity == null) internet_identity = await AuthClient.create();
+    if (internet_identity == null) try {
+      internet_identity = await AuthClient.create();
+    } catch (err) {
+      this.isConnectingWallet = false;
+      this.catchPopup("Error while Creating Auth Client", err);
+      return this.renderPosts();
+    };
     internet_identity.login({
       // 7 days in nanoseconds
       maxTimeToLive: BigInt(7 * 24 * 60 * 60 * 1000 * 1000 * 1000),
@@ -671,69 +652,65 @@ class App {
   }
 
   async handleAuthenticated(e) {
-    const identity = await internet_identity.getIdentity();
-    caller_agent = await HttpAgent.create({ identity });
-    caller_principal = identity.getPrincipal();
-    caller_account = AccountIdentifier.fromPrincipal({ principal: caller_principal }).toHex();
-    // console.log({ identity, caller: caller_principal.toText(), caller_account });
-
-    await prepareTokens();
-
+    try {
+      const identity = await internet_identity.getIdentity();
+      caller_agent = await HttpAgent.create({ identity });
+      caller_principal = identity.getPrincipal();
+      caller_account = AccountIdentifier.fromPrincipal({ principal: caller_principal }).toHex();
+      // console.log({ identity, caller: caller_principal.toText(), caller_account });
+      await prepareTokens();
+      if (is_posting) {
+        this.createNewPost(e);
+      };
+    } catch (err) {
+      this.catchPopup("Error after Authentication", err);
+    }
     this.isSelectingWallet = false;
     this.isConnectingWallet = false;
-    
-    if (is_pre_creating_new_post) {
-      this.createNewPost(e);
-    };
+    this.renderPosts();
   }
 
   async approveToken(e) {
     e.preventDefault();
     is_approving = true;
     this.renderPosts();
-
-    const token_user = genToken(selected_create_fee_token_canister, { agent: caller_agent });
-    const approve_res = await token_user.icrc2_approve({
-      from_subaccount: [],
-      amount: BigInt(post_cost * (selected_approval_plan == 'ten' ? 10 : selected_approval_plan == 'hundred' ? 100 : 1)),
-      spender : { owner : Principal.fromText(dhisper_id), subaccount : [] },
-      expected_allowance: [],
-      expires_at: [],
-      fee: [token_fee + 1],
-      memo: [],
-      created_at_time: [],
-    });
-    is_approving = false;
-    if ('Err' in approve_res) {
-      const err_obj = approve_res.Err;
-      console.error('approve err', err_obj);
-      let title, subtitle;
-      for (const err_key in err_obj) {
-        title = err_key;
-        subtitle = JSON.stringify(err_obj[err_key]);
-        break;
-      }
-      popup_html = html`<p>
-        <strong>${title}</strong><br>
-        <small>${subtitle}</small>
-      </p>
-      <button class="view-btn" @click=${(e) => {
-        e.preventDefault();
-        const popup_exist = document.querySelector('.popup');
-        if (popup_exist) {
-          popup_exist.classList.remove('in');
-          popup_exist.classList.add('out');
-          setTimeout(() => {
-            popup_html = null;
-            this.renderPosts();
-          }, 300);
+    // todo: when catch, reset the state booleans
+    try {
+      const token_user = genToken(selected_create_fee_token_canister, { agent: caller_agent });
+      const approve_res = await token_user.icrc2_approve({
+        from_subaccount: [],
+        amount: BigInt(post_cost * (selected_approval_plan == 'ten' ? 10 : selected_approval_plan == 'hundred' ? 100 : 1)),
+        spender : { owner : Principal.fromText(dhisper_id), subaccount : [] },
+        expected_allowance: [],
+        expires_at: [],
+        fee: [token_fee],
+        memo: [],
+        created_at_time: [],
+      });
+      is_approving = false;
+      if ('Err' in approve_res) {
+        const err_obj = approve_res.Err;
+        console.error('approve err', err_obj);
+        let title, subtitle;
+        for (const err_key in err_obj) {
+          title = err_key;
+          subtitle = JSON.stringify(err_obj[err_key]);
+          break;
         }
-      }}>Close</button>`;
-    } else is_waiting_approval = false;
-    if (is_pre_creating_new_post) {
-      this.createNewPost(e);
-    } else this.renderPosts();
+        this.showPopup(title, subtitle);
+      } else is_waiting_approval = false;
+      if (is_posting) {
+        this.createNewPost(e);
+      }; 
+    } catch (err) {
+      this.catchPopup("Error while Approving Payment", err);
+    }
+    this.renderPosts();
   }
+  // todo: add trycatch+popup 
+  // todo: add background waiter
+  // todo: add owner+time below thread
+  // todo: add logo
 
   renderPosts() {
     const currentPost = this.posts.length > 0? this.posts[this.currentIndex] : { content: 'Create the first post by clicking the "+" below!', timestamp: '' };
@@ -781,7 +758,6 @@ class App {
                 this.activeThread = null;
                 this.renderPosts();
               }, 500); // matches slideOut animation duration
-              this.closeCommentForm();
             }
           }}>✕</button>
   
@@ -806,7 +782,7 @@ class App {
     const create_new_thread_form = html`
       ${is_composing_post
       ? html`<div class="compose-backdrop" @click=${() => {
-          if (is_pre_creating_new_post) return;
+          if (is_posting) return;
           is_composing_post = false;
           is_seeing_cost = false;
           is_paying = false;
@@ -821,8 +797,8 @@ class App {
           <span class="char-count">${char_count}</span>
         </label>
 
-        <button class="send-btn" ?disabled=${is_pre_creating_new_post} @click=${(e) => this.createNewPost(e)}>
-          ${is_pre_creating_new_post
+        <button class="send-btn" ?disabled=${is_posting} @click=${(e) => this.createNewPost(e)}>
+          ${is_posting
             ? html`<span class="spinner"></span> Posting...`
             : html`➤ Post`}
         </button>
@@ -833,7 +809,7 @@ class App {
       ? html`<div class="wallet-backdrop" @click=${() => { 
           this.isSelectingWallet = false; 
           this.isConnectingWallet = false;
-          if (is_pre_creating_new_post) is_pre_creating_new_post = false;
+          if (is_posting) is_posting = false;
           this.renderPosts(); 
         }}></div>`
       : null}
@@ -873,7 +849,7 @@ class App {
       ? html`<div class="cost-backdrop" @click=${() => {
           if (is_paying) return;
           is_seeing_cost = false;
-          is_pre_creating_new_post = false;
+          is_posting = false;
           this.renderPosts(); 
         }}></div>`
       : null}
@@ -947,8 +923,8 @@ class App {
           try {
             await navigator.clipboard.writeText(caller_principal.toText());
             caller_principal_copied = true;
-          } catch (e) {
-            console.error('copy principal', e);
+          } catch (err) {
+            console.error('copy principal', err);
             const to_copy = document.getElementById("caller_principal_text");
             to_copy.value = caller_principal.toText();
             to_copy.select();
@@ -973,8 +949,8 @@ class App {
           try {
             await navigator.clipboard.writeText(caller_account);
             caller_account_copied = true;
-          } catch (e) {
-            console.error('copy account', e);
+          } catch (err) {
+            console.error('copy account', err);
             const to_copy = document.getElementById("caller_account_text");
             to_copy.value = caller_account;
             to_copy.select();
