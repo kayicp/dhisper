@@ -32,7 +32,7 @@ let is_comments_open = false;
 let is_posting = false;
 let is_creating_new_post = false;
 let is_waiting_balance = false;
-let is_viewing_token_details = false;
+let is_viewing_cost_details = false;
 let is_checking_balance = false;
 let is_waiting_approval = false;
 let is_approving = false;
@@ -71,6 +71,12 @@ const identityProvider =
 BigInt.prototype.toJSON = function () {
   return this.toString();
 };
+
+function shortPrincipal(p) {
+  let str = p.toText();
+  let splitted = str.split('-');
+  return `${splitted[0]}-...-${splitted[splitted.length - 1]}`;
+}
 
 function normalizeNumber(num) {
   if (typeof num !== 'number' || isNaN(num)) return String(num);
@@ -340,7 +346,14 @@ class App {
           const timestamps = await dhisper_anon.kay4_timestamps_of(post_ids);
           for (const i in timestamps) posts[i]['timestamp'] = timestamps[i].length > 0? new Date(Number(timestamps[i][0]) / 1000000) : null;
           resolve();
-        })()})
+        })()}),
+        ...post_ids.map((post_id, i) => {
+          return new Promise((resolve) => {(async () => {
+            const owners = await dhisper_anon.kay4_owners_of(post_id, [], [1]);
+            posts[i]['owner'] = owners.length > 0? owners[0].ICRC_1.owner : Principal.anonymous();
+            resolve();
+          })()})
+        }),
       ]);
       for (const post of posts) this.posts.push(post);
       if (this.currentIndex == null) this.startSlide(0, 'up');
@@ -405,6 +418,7 @@ class App {
     const replies = [];
     let content_count = 0;
     let timestamp_count = 0;
+    let owner_count = 0;
     while (true) {
       const last = replies.length - 1;
       const prev = replies.length == 0? [] : [replies[last].id];
@@ -429,8 +443,16 @@ class App {
             };
             timestamp_count += timestamps.length;
             resolve();
-          })()})
+          })()}),
+          ...reply_ids.map((reply_id, i) => {
+            return new Promise((resolve) => {(async () => {
+              const owners = await dhisper_anon.kay4_owners_of(reply_id, [], [1]);
+              replies[owner_count + +i]['owner'] = owners.length > 0? owners[0].ICRC_1.owner : Principal.anonymous();
+              resolve();
+            })()})
+          })
         ]);
+        owner_count += reply_ids.length;
       } catch (err) {
         this.catchPopup("Error while Fetching Comments", err);
         return this.renderPosts();
@@ -545,6 +567,7 @@ class App {
             const id = create_post_res.Ok;
             let content = '';
             let timestamp = '';
+            let owner = Principal.anonymous();
             await Promise.all([
               new Promise((resolve) => {(async () => {
                 const contents = await dhisper_anon.kay4_contents_of([id]);
@@ -556,8 +579,13 @@ class App {
                 timestamp = timestamps[0].length > 0? new Date(Number(timestamps[0][0]) / 1000000) : null;
                 resolve();
               })()}),
+              new Promise((resolve) => {(async () => {
+                const owners = await dhisper_anon.kay4_owners_of(id, [], [1]);
+                owner = owners.length > 0? owners[0].ICRC_1.owner : Principal.anonymous();
+                resolve();
+              })()}),
             ]);
-            this.posts = [{ id, content, timestamp }];
+            this.posts = [{ id, content, timestamp, owner }];
             this.startSlide(0, 'down');
         } catch (err) {
           this.catchPopup("Error while Fetching Created Post", err);
@@ -619,7 +647,7 @@ class App {
 
   viewTokenDetails(e) {
     e.preventDefault();
-    is_viewing_token_details = true;
+    is_viewing_cost_details = true;
     this.renderPosts();
   }
 
@@ -710,6 +738,7 @@ class App {
   // todo: redesign UI (smaller fonts, all buttons at the bottom)
 
   renderPosts() {
+    if (this.isAnimating) return;
     let current_post;
     if (this.currentIndex == null) {
       current_post = html`<div class="post-content-wrapper">
@@ -719,26 +748,26 @@ class App {
     } else {
       const currentPost = this.posts[this.currentIndex];
       current_post = html`<div class="post-content-wrapper">
-        <div class="text">${currentPost.content}</div>
-        <div class="subtext">${timeAgo(currentPost.timestamp)}</div>
+        <div id="current_text" class="text">${currentPost? currentPost.content : document.getElementById("current_text").innerText}</div>
+        <div id="current_subtext" class="subtext">${currentPost? html`${shortPrincipal(currentPost.owner)}<br>${timeAgo(currentPost.timestamp)}` : document.getElementById("current_subtext").innerText}</div>
         <div class="post-actions-right">
           <button class="comment-btn" @click=${() => this.handleCommentClick(currentPost)}>
-            💬 ${currentPost.comment_count || 0}</button>
+            💬 ${currentPost?.comment_count || 0}</button>
         </div>
       </div>`;
     }
     let next_post;
     if (this.nextIndex == null) next_post = null; else {
       const nextPost = this.posts[this.nextIndex];
-      next_post = html`<div class="post-content-wrapper">
+      next_post = nextPost ? html`<div class="post-content-wrapper">
         <div class="text">${nextPost.content}</div>
-        <div class="subtext">${timeAgo(nextPost.timestamp)}</div>
+        <div class="subtext">${shortPrincipal(nextPost.owner)}<br>${timeAgo(nextPost.timestamp)}</div>
         <div class="post-actions-right">
           <button class="comment-btn" @click=${() => this.handleCommentClick(nextPost)}>
             💬 ${nextPost.comment_count || 0}
           </button>
         </div>
-      </div>`;
+      </div>` : null;
     }
     
     const threads_pane = html`
@@ -766,12 +795,12 @@ class App {
   
           <div class="comment-list">
             <div class="thread-post">
-              <div class="meta">#${this.activeThread.id} • ${this.activeThread.timestamp ? timeAgo(this.activeThread.timestamp) : "Unknown time"}</div>
+              <div class="meta">#${this.activeThread.id} • ${shortPrincipal(this.activeThread.owner)}${this.activeThread.timestamp ? ' • ' + timeAgo(this.activeThread.timestamp) : ''}</div>
               <div class="content">${this.activeThread.content}</div>
             </div>
             ${this.threadComments.map(comment => html`
               <div class="comment">
-                <div class="meta">#${comment.id}${comment.timestamp ? ` • ${timeAgo(comment.timestamp)}` : ''}</div>
+                <div class="meta">#${comment.id} • ${shortPrincipal(comment.owner)}${comment.timestamp ? ` • ${timeAgo(comment.timestamp)}` : ''}</div>
                 <div class="content">${comment.content}</div>
               </div>
             `)}
@@ -887,13 +916,13 @@ class App {
       </div>
     `;
     const token_balance_waiter_details = html`
-    ${is_viewing_token_details
+    ${is_viewing_cost_details
     ? html`<div class="cost-breakdown-backdrop" @click=${() => { 
-        is_viewing_token_details = false; 
+        is_viewing_cost_details = false; 
         this.renderPosts(); 
       }}></div>`
     : null}
-    <div class="cost-breakdown-drawer ${is_viewing_token_details ? 'open' : ''}">
+    <div class="cost-breakdown-drawer ${is_viewing_cost_details ? 'open' : ''}">
       <p>
       <strong>Fee Details</strong>
       <br>
