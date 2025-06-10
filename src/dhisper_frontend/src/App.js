@@ -6,8 +6,6 @@ import { HttpAgent } from '@dfinity/agent';
 import { Principal } from '@dfinity/principal';
 import { AccountIdentifier } from '@dfinity/ledger-icp'
 
-// todo: clear post content when open/close comments
-
 let internet_identity = null;
 let caller_agent = null;
 let caller_principal = null;
@@ -289,7 +287,7 @@ async function prepareTokens() {
 class App {
   constructor() {
     this.posts = [];
-    this.currentIndex = 0;
+    this.currentIndex = null;
     this.nextIndex = null;
     this.direction = null;
     this.isAnimating = false;
@@ -307,7 +305,7 @@ class App {
     this.threadComments = [];
     this.commentInput = "";
 
-    this.setupScrollHandler();
+    this.setupScroll();
     this.renderPosts();
     this.getPosts();
   }
@@ -328,12 +326,9 @@ class App {
     } catch (err) {
       this.showPopup("Error while Fetching Post IDs");
     }
-
     if (post_ids.length == 0) return this.renderPosts();
-
     const posts = [];
     for (const id of post_ids) posts.push({ id });
-
     try {
       await Promise.all([
         new Promise((resolve) => {(async () => {
@@ -348,18 +343,21 @@ class App {
         })()})
       ]);
       for (const post of posts) this.posts.push(post);
+      if (this.currentIndex == null) this.startSlide(0, 'up');
     } catch (err) {
       this.catchPopup("Error while Building Posts", err);
     }
     this.renderPosts();
   }
 
-  setupScrollHandler() {
+  setupScroll() {
     window.addEventListener('wheel', (e) => {
       if (this.isAnimating) return;
       if (is_composing_post) return;
       if (is_comments_open) return;
-
+      
+      this.post_content = "";
+      this.char_count = 0;
       if (e.deltaY > 0 && this.currentIndex < this.posts.length - 1) {
         this.startSlide(this.currentIndex + 1, 'up');
       } else if (e.deltaY < 0 && this.currentIndex > 0) {
@@ -396,6 +394,8 @@ class App {
   handleCommentClick(post) {
     this.activeThread = post;
     is_comments_open = true;
+    this.post_content = "";
+    this.char_count = 0;
     this.renderPosts();
     this.getComments();
   }
@@ -541,8 +541,7 @@ class App {
         // todo: track background process instead of this
         if (this.activeThread) {
           this.getComments();
-        } else {
-          try {
+        } else try {
             const id = create_post_res.Ok;
             let content = '';
             let timestamp = '';
@@ -559,14 +558,12 @@ class App {
               })()}),
             ]);
             this.posts = [{ id, content, timestamp }];
-            this.currentIndex = 0;
-            post_content = '';
-            char_count = 0;
             this.startSlide(0, 'down');
-          } catch (err) {
-            this.catchPopup("Error while Fetching Created Post", err);
-          }
+        } catch (err) {
+          this.catchPopup("Error while Fetching Created Post", err);
         }
+        post_content = '';
+        char_count = 0;
       }
     } catch (err) {
       this.catchPopup("Error while Create Post", err);
@@ -655,6 +652,7 @@ class App {
     try {
       const identity = await internet_identity.getIdentity();
       caller_agent = await HttpAgent.create({ identity });
+      // if (network !== 'ic') await caller_agent.fetchRootKey();
       caller_principal = identity.getPrincipal();
       caller_account = AccountIdentifier.fromPrincipal({ principal: caller_principal }).toHex();
       // console.log({ identity, caller: caller_principal.toText(), caller_account });
@@ -674,7 +672,6 @@ class App {
     e.preventDefault();
     is_approving = true;
     this.renderPosts();
-    // todo: when catch, reset the state booleans
     try {
       const token_user = genToken(selected_create_fee_token_canister, { agent: caller_agent });
       const approve_res = await token_user.icrc2_approve({
@@ -703,48 +700,52 @@ class App {
         this.createNewPost(e);
       }; 
     } catch (err) {
+      is_approving = false;
       this.catchPopup("Error while Approving Payment", err);
     }
     this.renderPosts();
   }
-  // todo: add trycatch+popup 
-  // todo: add background waiter
-  // todo: add owner+time below thread
   // todo: add logo
+  // todo: add background waiter
+  // todo: redesign UI (smaller fonts, all buttons at the bottom)
 
   renderPosts() {
-    const currentPost = this.posts.length > 0? this.posts[this.currentIndex] : { content: 'Create the first post by clicking the "+" below!', timestamp: '' };
-    const nextPost = this.nextIndex !== null ? this.posts[this.nextIndex] : null;
-
-    const threads_pane = html`
-      <div class="post-layer current ${this.direction === 'up' ? 'slide-out-up' : this.direction === 'down' ? 'slide-out-down' : ''}"
-          style="background: ${this.background}">
-        <div class="post-content-wrapper">
-          <div class="text">${currentPost.content}</div>
-          ${this.posts.length > 0? html`<div class="post-actions-right">
-            <button class="comment-btn" @click=${() => this.handleCommentClick(currentPost)}>
-              💬 ${currentPost.comment_count || 0}
-            </button>
-          </div>` : ''}
+    let current_post;
+    if (this.currentIndex == null) {
+      current_post = html`<div class="post-content-wrapper">
+        <span class="spinner"></span>
+        <div class="subtext">Loading</div>
+      </div>`;
+    } else {
+      const currentPost = this.posts[this.currentIndex];
+      current_post = html`<div class="post-content-wrapper">
+        <div class="text">${currentPost.content}</div>
+        <div class="subtext">${timeAgo(currentPost.timestamp)}</div>
+        <div class="post-actions-right">
+          <button class="comment-btn" @click=${() => this.handleCommentClick(currentPost)}>
+            💬 ${currentPost.comment_count || 0}</button>
         </div>
-      </div>
-      ${nextPost !== null
-        ? html`
-            <div class="post-layer next ${this.direction === 'up' ? 'slide-in-up' : 'slide-in-down'}"
-                style="background: ${this.nextBackground}">
-              <div class="post-content-wrapper">
-                <div class="text">${nextPost.content}</div>
-                ${this.posts.length > 0? html`<div class="post-actions-right">
-                  <button class="comment-btn" @click=${() => this.handleCommentClick(nextPost)}>
-                    💬 ${nextPost.comment_count || 0}
-                  </button>
-                </div>` : ''}
-              </div>
-            </div>
-          `
-        : null}
-    `;
+      </div>`;
+    }
+    let next_post;
+    if (this.nextIndex == null) next_post = null; else {
+      const nextPost = this.posts[this.nextIndex];
+      next_post = html`<div class="post-content-wrapper">
+        <div class="text">${nextPost.content}</div>
+        <div class="subtext">${timeAgo(nextPost.timestamp)}</div>
+        <div class="post-actions-right">
+          <button class="comment-btn" @click=${() => this.handleCommentClick(nextPost)}>
+            💬 ${nextPost.comment_count || 0}
+          </button>
+        </div>
+      </div>`;
+    }
     
+    const threads_pane = html`
+      <div class="post-layer current ${this.direction === 'up' ? 'slide-out-up' : this.direction === 'down' ? 'slide-out-down' : ''}" style="background: ${this.background}">${current_post}</div>
+      ${next_post !== null? 
+        html`<div class="post-layer next ${this.direction === 'up' ? 'slide-in-up' : 'slide-in-down'}" style="background: ${this.nextBackground}">${next_post}</div>` : null}
+    `;    
     const replies_pane = this.posts.length > 0 && is_comments_open && this.activeThread
     ? html`
         <div class="comment-panel slide-in">
@@ -756,6 +757,8 @@ class App {
               setTimeout(() => {
                 is_comments_open = false;
                 this.activeThread = null;
+                this.post_content = "";
+                this.char_count = 0;
                 this.renderPosts();
               }, 500); // matches slideOut animation duration
             }
