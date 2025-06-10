@@ -296,7 +296,7 @@ class App {
     this.currentIndex = null;
     this.nextIndex = null;
     this.direction = null;
-    this.isAnimating = false;
+    this.isSliding = false;
     
     this.isSelectingWallet = false;
     this.isConnectingWallet = false;
@@ -364,13 +364,11 @@ class App {
   }
 
   setupScroll() {
-    window.addEventListener('wheel', (e) => {
-      if (this.isAnimating) return;
+    window.addEventListener('wheel', async (e) => {
+      if (this.isSliding) return;
       if (is_composing_post) return;
       if (is_comments_open) return;
       
-      this.post_content = "";
-      this.char_count = 0;
       if (e.deltaY > 0 && this.currentIndex < this.posts.length - 1) {
         this.startSlide(this.currentIndex + 1, 'up');
       } else if (e.deltaY < 0 && this.currentIndex > 0) {
@@ -384,24 +382,26 @@ class App {
   }
 
   startSlide(newIndex, direction) {
-    this.isAnimating = true;
-    this.nextIndex = newIndex;
-    this.direction = direction;
-    this.nextBackground = this.getRandomGradient();
+    return new Promise((resolve) => {
+      this.nextIndex = newIndex;
+      this.direction = direction;
+      this.nextBackground = this.getRandomGradient();
 
-    if (newIndex == this.posts.length - 1) this.getPosts();
-
-    this.threadComments = [];
-    this.renderPosts();
-
-    setTimeout(() => {
-      this.currentIndex = newIndex;
-      this.background = this.nextBackground;
-      this.nextIndex = null;
-      this.direction = null;
-      this.isAnimating = false;
+      this.threadComments = [];
       this.renderPosts();
-    }, 600);
+      this.isSliding = true;
+
+      setTimeout(() => {
+        this.currentIndex = newIndex;
+        this.background = this.nextBackground;
+        this.nextIndex = null;
+        this.direction = null;
+        this.isSliding = false;
+        if (newIndex == this.posts.length - 1) this.getPosts(); 
+        this.renderPosts();
+        resolve();
+      }, 600);
+    });
   }
 
   handleCommentClick(post) {
@@ -585,8 +585,14 @@ class App {
                 resolve();
               })()}),
             ]);
-            this.posts = [{ id, content, timestamp, owner }];
+            const new_post = { id, content, timestamp, owner };
+            if (this.currentIndex == null) this.posts = [new_post]; else {
+              this.posts = [new_post, this.posts[this.currentIndex]];
+              this.currentIndex = 1;
+            };
             this.startSlide(0, 'down');
+            this.posts = [new_post];
+            this.currentIndex = 0;
         } catch (err) {
           this.catchPopup("Error while Fetching Created Post", err);
         }
@@ -738,7 +744,7 @@ class App {
   // todo: redesign UI (smaller fonts, all buttons at the bottom)
 
   renderPosts() {
-    if (this.isAnimating) return;
+    if (this.isSliding) return;
     let current_post;
     if (this.currentIndex == null) {
       current_post = html`<div class="post-content-wrapper">
@@ -747,9 +753,10 @@ class App {
       </div>`;
     } else {
       const currentPost = this.posts[this.currentIndex];
+      console.log({ currentPost });
       current_post = html`<div class="post-content-wrapper">
-        <div id="current_text" class="text">${currentPost? currentPost.content : document.getElementById("current_text").innerText}</div>
-        <div id="current_subtext" class="subtext">${currentPost? html`${shortPrincipal(currentPost.owner)}<br>${timeAgo(currentPost.timestamp)}` : document.getElementById("current_subtext").innerText}</div>
+        <div class="text">${currentPost?.content ?? ''}</div>
+        <div class="subtext">${currentPost? shortPrincipal(currentPost.owner) : ''}<br>${currentPost ? timeAgo(currentPost.timestamp) : ''}</div>
         <div class="post-actions-right">
           <button class="comment-btn" @click=${() => this.handleCommentClick(currentPost)}>
             💬 ${currentPost?.comment_count || 0}</button>
@@ -759,6 +766,7 @@ class App {
     let next_post;
     if (this.nextIndex == null) next_post = null; else {
       const nextPost = this.posts[this.nextIndex];
+      console.log({ nextPost });
       next_post = nextPost ? html`<div class="post-content-wrapper">
         <div class="text">${nextPost.content}</div>
         <div class="subtext">${shortPrincipal(nextPost.owner)}<br>${timeAgo(nextPost.timestamp)}</div>
@@ -770,10 +778,8 @@ class App {
       </div>` : null;
     }
     
-    const threads_pane = html`
-      <div class="post-layer current ${this.direction === 'up' ? 'slide-out-up' : this.direction === 'down' ? 'slide-out-down' : ''}" style="background: ${this.background}">${current_post}</div>
-      ${next_post !== null? 
-        html`<div class="post-layer next ${this.direction === 'up' ? 'slide-in-up' : 'slide-in-down'}" style="background: ${this.nextBackground}">${next_post}</div>` : null}
+    const threads_pane = html`<div class="post-layer current ${this.direction === 'up' ? 'slide-out-up' : this.direction === 'down' ? 'slide-out-down' : ''}" style="background: ${this.background}">${current_post}</div>
+      ${next_post !== null? html`<div class="post-layer next ${this.direction === 'up' ? 'slide-in-up' : 'slide-in-down'}" style="background: ${this.nextBackground}">${next_post}</div>` : null}
     `;    
     const replies_pane = this.posts.length > 0 && is_comments_open && this.activeThread
     ? html`
