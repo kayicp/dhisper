@@ -1,7 +1,7 @@
 echo "$(dfx identity use default)"
 dfx canister call icp_token icrc1_transfer "record {
 	to = record {
-		owner = principal \"gppvg-bhnva-byqgy-ccrv5-a4clj-gvlxk-k3354-gdr2v-trdtm-zmyrk-bqe\";
+		owner = principal \"r2tf7-cwjhs-egtwl-bivce-wb2pa-kfm6s-zt7j4-ntezc-pm3na-zi7p5-sae\";
 		subaccount = null;
 	};
 	amount =  10_000_000;

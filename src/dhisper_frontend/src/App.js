@@ -201,11 +201,6 @@ Brightness=0.299×R+0.587×G+0.114×B
 #0E031F
 #281447
 */
-function randomGradient() {
-  const colors = [];
-  for (let i = 0; i < 2; i++) colors.push(`#${Math.floor(Math.random()*16777215).toString(16).padStart(6, '0')}`);
-  return `linear-gradient(135deg, ${colors[0]}, ${colors[1]})`;
-}
 
 function timeAgo(date) {
   const now = new Date();
@@ -305,7 +300,6 @@ class App {
     this.isApproving = false;
     
     this.root = document.getElementById('root');
-    this.background = this.getRandomGradient();
     
     this.activeThread = null;
     this.threadComments = [];
@@ -377,15 +371,10 @@ class App {
     });
   }
 
-  getRandomGradient() {
-    return randomGradient();
-  }
-
   startSlide(newIndex, direction) {
     return new Promise((resolve) => {
       this.nextIndex = newIndex;
       this.direction = direction;
-      this.nextBackground = this.getRandomGradient();
 
       this.threadComments = [];
       this.renderPosts();
@@ -393,7 +382,6 @@ class App {
 
       setTimeout(() => {
         this.currentIndex = newIndex;
-        this.background = this.nextBackground;
         this.nextIndex = null;
         this.direction = null;
         this.isSliding = false;
@@ -404,13 +392,29 @@ class App {
     });
   }
 
-  handleCommentClick(post) {
-    this.activeThread = post;
-    is_comments_open = true;
-    this.post_content = "";
-    this.char_count = 0;
-    this.renderPosts();
-    this.getComments();
+  closeComment() {
+    const panel = document.querySelector('.comment-panel');
+    if (panel) {
+      panel.classList.remove('slide-in');
+      panel.classList.add('slide-out');
+      setTimeout(() => {
+        is_comments_open = false;
+        this.activeThread = null;
+        this.renderPosts();
+      }, 500); // matches slideOut animation duration
+    }
+  }
+
+  handleCommentClick(e) {
+    e.preventDefault();
+    is_comments_open = !is_comments_open;
+    if (is_comments_open) {
+      this.activeThread = this.posts[
+        this.nextIndex == null? 
+        this.currentIndex : this.nextIndex];
+      this.renderPosts();
+      if (this.activeThread) this.getComments(); else this.closeComment();
+    } else this.closeComment();
   }
 
   async getComments() {
@@ -740,8 +744,7 @@ class App {
     this.renderPosts();
   }
   // todo: add logo
-  // todo: add background waiter
-  // todo: redesign UI (smaller fonts, all buttons at the bottom)
+  // todo: redesign UI (smaller fonts)
 
   renderPosts() {
     if (this.isSliding) return;
@@ -753,14 +756,9 @@ class App {
       </div>`;
     } else {
       const currentPost = this.posts[this.currentIndex];
-      console.log({ currentPost });
       current_post = html`<div class="post-content-wrapper">
         <div class="text">${currentPost?.content ?? ''}</div>
         <div class="subtext">${currentPost? shortPrincipal(currentPost.owner) : ''}<br>${currentPost ? timeAgo(currentPost.timestamp) : ''}</div>
-        <div class="post-actions-right">
-          <button class="comment-btn" @click=${() => this.handleCommentClick(currentPost)}>
-            💬 ${currentPost?.comment_count || 0}</button>
-        </div>
       </div>`;
     }
     let next_post;
@@ -770,35 +768,15 @@ class App {
       next_post = nextPost ? html`<div class="post-content-wrapper">
         <div class="text">${nextPost.content}</div>
         <div class="subtext">${shortPrincipal(nextPost.owner)}<br>${timeAgo(nextPost.timestamp)}</div>
-        <div class="post-actions-right">
-          <button class="comment-btn" @click=${() => this.handleCommentClick(nextPost)}>
-            💬 ${nextPost.comment_count || 0}
-          </button>
-        </div>
       </div>` : null;
     }
     
-    const threads_pane = html`<div class="post-layer current ${this.direction === 'up' ? 'slide-out-up' : this.direction === 'down' ? 'slide-out-down' : ''}" style="background: ${this.background}">${current_post}</div>
-      ${next_post !== null? html`<div class="post-layer next ${this.direction === 'up' ? 'slide-in-up' : 'slide-in-down'}" style="background: ${this.nextBackground}">${next_post}</div>` : null}
+    const threads_pane = html`<div class="post-layer current ${this.direction === 'up' ? 'slide-out-up' : this.direction === 'down' ? 'slide-out-down' : ''}">${current_post}</div>
+      ${next_post !== null? html`<div class="post-layer next ${this.direction === 'up' ? 'slide-in-up' : 'slide-in-down'}">${next_post}</div>` : null}
     `;    
     const replies_pane = this.posts.length > 0 && is_comments_open && this.activeThread
     ? html`
         <div class="comment-panel slide-in">
-          <button class="close-btn" @click=${() => {
-            const panel = document.querySelector('.comment-panel');
-            if (panel) {
-              panel.classList.remove('slide-in');
-              panel.classList.add('slide-out');
-              setTimeout(() => {
-                is_comments_open = false;
-                this.activeThread = null;
-                this.post_content = "";
-                this.char_count = 0;
-                this.renderPosts();
-              }, 500); // matches slideOut animation duration
-            }
-          }}>✕</button>
-  
           <div class="comment-list">
             <div class="thread-post">
               <div class="meta">#${this.activeThread.id} • ${shortPrincipal(this.activeThread.owner)}${this.activeThread.timestamp ? ' • ' + timeAgo(this.activeThread.timestamp) : ''}</div>
@@ -813,10 +791,6 @@ class App {
           </div>
         </div>
       ` : null;
-    const create_new_post_btn = html`<button class="create-post-btn" @click=${() => { 
-      is_composing_post = true; 
-      this.renderPosts();
-    }}>+</button>`;
     const create_new_thread_form = html`
       ${is_composing_post
       ? html`<div class="compose-backdrop" @click=${() => {
@@ -1081,19 +1055,41 @@ class App {
     <div class="popup in">${popup_html}</div>
   ` : null;
 
-    render(html`
-      <div class="post-wrapper">
-        ${threads_pane}
-        ${replies_pane}
-        ${create_new_post_btn}
-        ${create_new_thread_form}        
-        ${wallet_selectors}
-        ${cost_and_reasons}
-        ${token_balance_waiter}
-        ${token_balance_waiter_details}
-        ${token_approve_form}
-        ${popup}
-      </div>
+    render(html`<div class="app-grid">
+    <header class="logo-bar">
+      <!-- <img src="assets/logo.svg" alt="Dapp Logo" /> -->
+    </header>
+
+    <main class="content-area">
+      ${threads_pane}
+      ${replies_pane}
+    </main>
+
+    <nav class="action-bar">
+      <button class="action-btn" >
+        🔄
+        <span>Refresh</span>
+      </button>
+      <button class="action-btn" @click=${() => { 
+        is_composing_post = true; 
+        this.renderPosts();
+      }}>
+        ✍️
+        <span>${is_comments_open? 'Add Reply' : 'New Thread'} </span>
+      </button>
+      <button class="action-btn" @click=${(e) => this.handleCommentClick(e)}>
+        💬
+        <span>${is_comments_open? 'Close' : 'Open'} Replies</span>
+      </button>
+    </nav>
+  </div>
+      ${create_new_thread_form}        
+      ${wallet_selectors}
+      ${cost_and_reasons}
+      ${token_balance_waiter}
+      ${token_balance_waiter_details}
+      ${token_approve_form}
+      ${popup}
     `, this.root);
   }
 }
