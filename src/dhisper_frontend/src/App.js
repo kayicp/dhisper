@@ -392,7 +392,8 @@ class App {
     });
   }
 
-  closeComment() {
+  closeReplies(e) {
+    e.preventDefault();
     const panel = document.querySelector('.comment-panel');
     if (panel) {
       panel.classList.remove('slide-in');
@@ -405,16 +406,17 @@ class App {
     }
   }
 
-  handleCommentClick(e) {
+  openReplies(e) {
     e.preventDefault();
-    is_comments_open = !is_comments_open;
-    if (is_comments_open) {
-      this.activeThread = this.posts[
-        this.nextIndex == null? 
-        this.currentIndex : this.nextIndex];
+    is_comments_open = true;
+    this.activeThread = this.posts[
+      this.nextIndex == null? 
+      this.currentIndex : this.nextIndex];
+    
+    if (this.activeThread) {
       this.renderPosts();
-      if (this.activeThread) this.getComments(); else this.closeComment();
-    } else this.closeComment();
+      this.getComments();
+    }
   }
 
   async getComments() {
@@ -523,9 +525,9 @@ class App {
       token_total = { amount: total_cost, msg: `Total posting fee: ${normalizeNumber(Number(total_cost) / token_power)} ${token_symbol}` };
       token_details = [
         { amount: base_cost, msg: `Posting fee: ${normalizeNumber(Number(base_cost) / token_power)} ${token_symbol}`, submsg: `helps keep Dhisper spam-free and ad-free for you`},
-        { amount: token_fee, msg: `Network fee: ${normalizeNumber(Number(token_fee) / token_power)} ${token_symbol}`, submsg: `covers the small cost of recording your post`},
+        { amount: token_fee, msg: `Payment fee: ${normalizeNumber(Number(token_fee) / token_power)} ${token_symbol}`, submsg: `covers the small cost of transferring your token`},
         { amount: require_approval ? token_fee : BigInt(0), msg: `Payment Approval fee: ${normalizeNumber(Number(token_fee) / token_power)} ${token_symbol}`, submsg: `allows Dhisper to deduct the posting fee automatically for you`},
-        { amount: extra_cost, msg: `Extra characters fee: ${normalizeNumber(Number(extra_cost) / token_power)} ${token_symbol}`, submsg: `You exceed ${max_content_size} characters; either trim it or pay a little extra` },
+        { amount: extra_cost, msg: `Extra characters fee: ${normalizeNumber(Number(extra_cost) / token_power)} ${token_symbol}`, submsg: `You exceed ${max_content_size} characters; either trim it, or pay a little extra` },
       ];
       if (!is_seeing_cost) {
         is_seeing_cost = true;
@@ -746,6 +748,47 @@ class App {
   // todo: add logo
   // todo: redesign UI (smaller fonts)
 
+  closeCompose(e) {
+    e.preventDefault();
+    if (is_posting) return;
+    is_composing_post = false;
+    is_seeing_cost = false;
+    is_paying = false;
+    this.renderPosts(); 
+  }
+
+  closePayment(e) {
+    e.preventDefault();
+    if (is_paying) return;
+    is_seeing_cost = false;
+    is_posting = false;
+    this.renderPosts(); 
+  };
+
+  closeLogin(e) {
+    e.preventDefault();
+    this.isSelectingWallet = false; 
+    this.isConnectingWallet = false;
+    is_posting = false;
+    this.renderPosts(); 
+  }
+
+  closeBalanceWaiter(e) {
+    e.preventDefault();
+    if (is_checking_balance) return;
+    is_waiting_balance = false;
+    is_paying = false;
+    this.renderPosts(); 
+  }
+
+  closeApprovalWaiter(e) {
+    e.preventDefault();
+    if (is_approving) return;
+    is_waiting_approval = false;
+    is_paying = false;
+    this.renderPosts();
+  }
+
   renderPosts() {
     if (this.isSliding) return;
     let current_post;
@@ -778,7 +821,8 @@ class App {
     ? html`
         <div class="comment-panel slide-in">
           <div class="comment-list">
-            <div class="thread-post">
+            <div class="action-size"></div>
+            <div class="comment">
               <div class="meta">#${this.activeThread.id} • ${shortPrincipal(this.activeThread.owner)}${this.activeThread.timestamp ? ' • ' + timeAgo(this.activeThread.timestamp) : ''}</div>
               <div class="content">${this.activeThread.content}</div>
             </div>
@@ -788,54 +832,55 @@ class App {
                 <div class="content">${comment.content}</div>
               </div>
             `)}
+            <div class="action-size"></div>
+          </div>
+          <div class="action-bar sticky">
+            <button class="action-btn" @click=${(e) => this.closeReplies(e)}>Close</button>
+            <button class="action-btn" @click=${() => { 
+              is_composing_post = true; 
+              this.renderPosts();
+            }}>Add Reply</button>
           </div>
         </div>
       ` : null;
+      // todo: fix the small text since we've using 1.25 rem
+      // todo: reduce to 1rem on default text
     const create_new_thread_form = html`
       ${is_composing_post
-      ? html`<div class="compose-backdrop" @click=${() => {
-          if (is_posting) return;
-          is_composing_post = false;
-          is_seeing_cost = false;
-          is_paying = false;
-          this.renderPosts(); 
-        }}></div>` : null}
-      <div class="compose-drawer ${is_composing_post ? 'open' : ''}">
-        <p><strong>${is_comments_open ? 'Add a Reply' : 'Create New Thread'}</strong></p>
-        <label class="field">
+      ? html`<div class="compose-backdrop" @click=${(e) => this.closeCompose(e)}></div>` : null}
+      <div class="drawer compose ${is_composing_post ? 'open' : ''}">
+        <p>
+          <strong>${is_comments_open ? 'Add a Reply' : 'Create New Thread'}</strong><br>
+          <br>
           <input type="text" placeholder="${is_comments_open ? 'What do you think about the thread?' : "What's on your mind?"}"
-            @input=${(e) => this.updateCharCount(e)} 
-            .value=${post_content || ''}/>
+              @input=${(e) => this.updateCharCount(e)} 
+              .value=${post_content || ''}/>
           <span class="char-count">${char_count}</span>
-        </label>
-
-        <button class="send-btn" ?disabled=${is_posting} @click=${(e) => this.createNewPost(e)}>
-          ${is_posting
+        </p>
+        <div class="action-bar">
+          <button class="action-btn" ?disabled=${is_posting} @click=${(e) => this.closeCompose(e)}>Close</button>
+          <button class="action-btn" ?disabled=${is_posting} @click=${(e) => this.createNewPost(e)}>${is_posting
             ? html`<span class="spinner"></span> Posting...`
-            : html`➤ Post`}
-        </button>
+            : html`➤ Post`}</button>
+        </div>
       </div>
     `;
     const wallet_selectors = html`
       ${this.isSelectingWallet
-      ? html`<div class="wallet-backdrop" @click=${() => { 
-          this.isSelectingWallet = false; 
-          this.isConnectingWallet = false;
-          if (is_posting) is_posting = false;
-          this.renderPosts(); 
-        }}></div>`
+      ? html`<div class="wallet-backdrop" @click=${(e) => this.closeLogin(e)}></div>`
       : null}
-      <div class="wallet-drawer ${this.isSelectingWallet ? 'open' : ''}">
+      <div class="drawer wallet ${this.isSelectingWallet ? 'open' : ''}">
         <p>
           <strong>Sign in to start</strong>
           <br>
           <small><small>No account or password needed</small></small>
         </p>
-        <button class="send-btn" ?disabled=${this.isConnectingWallet} @click=${(e) => this.loginInternetIdentity(e)}>
-          ${this.isConnectingWallet
+        <div class="action-bar">
+          <button class="action-btn" @click=${(e) => this.closeLogin(e)}>Close</button>
+          <button class="action-btn" ?disabled=${this.isConnectingWallet} @click=${(e) => this.loginInternetIdentity(e)}>${this.isConnectingWallet
             ? html`<span class="spinner"></span> Connecting...`
-            : html`Continue with Internet Identity`}
-        </button>
+            : html`Continue with Internet Identity`}</button>
+        </div>
       </div>
     `;
 
@@ -846,7 +891,7 @@ class App {
   //       this.renderPosts(); 
   //     }}></div>`
   //   : null}
-  //   <div class="token-drawer ${this.isSelectingToken ? 'open' : ''}">
+  //   <div class="drawer token ${this.isSelectingToken ? 'open' : ''}">
   //     <div>Select the token of your post</div>
       
   //     <button class="send-btn" ?disabled=${this.isConnectingWallet} @click=${(e) => this.loginInternetIdentity(e)}>
@@ -858,14 +903,9 @@ class App {
   // `;
       const cost_and_reasons = html`
       ${is_seeing_cost
-      ? html`<div class="cost-backdrop" @click=${() => {
-          if (is_paying) return;
-          is_seeing_cost = false;
-          is_posting = false;
-          this.renderPosts(); 
-        }}></div>`
+      ? html`<div class="cost-backdrop" @click=${(e) => this.closePayment(e)}></div>`
       : null}
-      <div class="cost-drawer ${is_seeing_cost ? 'open' : ''}">
+      <div class="drawer cost ${is_seeing_cost ? 'open' : ''}">
         <p>
           <strong>${token_total.msg}</strong>
           <button class="view-btn" @click=${(e) => this.viewTokenDetails(e)}>Show fee details</button>
@@ -888,11 +928,13 @@ class App {
           <br>
           <small><small>Post now & lock in your spot for token rewards!</small></small>
         </p>
-        <button class="send-btn" ?disabled=${is_paying} @click=${(e) => {
-          is_paying = true;
-          this.createNewPost(e);
-        }}>${is_paying ? html`<span class="spinner"></span> Paying...`
-          : html`Pay`}</button>
+        <div class="action-bar">
+          <button class="action-btn" ?disabled=${is_paying} @click=${(e) => this.closePayment(e)}}>Close</button>
+          <button class="action-btn" ?disabled=${is_paying} @click=${(e) => {
+            is_paying = true;
+            this.createNewPost(e);
+          }}>${is_paying ? html`<span class="spinner"></span> Paying...` : html`Pay`}</button>
+        </div>
       </div>
     `;
     const token_balance_waiter_details = html`
@@ -902,7 +944,7 @@ class App {
         this.renderPosts(); 
       }}></div>`
     : null}
-    <div class="cost-breakdown-drawer ${is_viewing_cost_details ? 'open' : ''}">
+    <div class="drawer cost-breakdown ${is_viewing_cost_details ? 'open' : ''}">
       <p>
       <strong>Fee Details</strong>
       <br>
@@ -916,14 +958,9 @@ class App {
     </div>
   `;
     const token_balance_waiter = html`${is_waiting_balance
-    ? html`<div class="balance-backdrop" @click=${() => {
-        if (is_checking_balance) return;
-        is_waiting_balance = false;
-        is_paying = false;
-        this.renderPosts(); 
-      }}></div>`
+    ? html`<div class="balance-backdrop" @click=${(e) => this.closeBalanceWaiter(e)}></div>`
     : null}
-    <div class="balance-drawer ${is_waiting_balance ? 'open' : ''}">
+    <div class="drawer balance ${is_waiting_balance ? 'open' : ''}">
       <p>
         <strong>Oops, you don't have enough ${token_symbol}</strong><br>
         <br><small>${token_total.msg}</small>
@@ -984,27 +1021,24 @@ class App {
         <br>
         <br><small><small>No rush, we'll be right here waiting for your top-up.</small></small>
       </p>
-      <button class="send-btn" ?disabled=${is_checking_balance} @click=${(e) => this.createNewPost(e)}>
-        ${is_checking_balance
-          ? html`<span class="spinner"></span> Checking...`
-          : html`I have sent`}
-      </button>
+      <div class="action-bar">
+        <button class="action-btn" ?disabled=${is_checking_balance} @click=${(e) => this.closeBalanceWaiter(e)}>Close</button>
+        <button class="action-btn" ?disabled=${is_checking_balance} @click=${(e) => this.createNewPost(e)}>
+          ${is_checking_balance
+            ? html`<span class="spinner"></span> Checking...`
+            : html`I have sent`}
+        </button>
+      </div>
     </div>
 `;
-    
   const token_approve_form = html`
       ${is_waiting_approval
-      ? html`<div class="approve-backdrop" @click=${() => {
-          if (is_approving) return;
-          is_waiting_approval = false;
-          is_paying = false;
-          this.renderPosts();
-        }}></div>`
+      ? html`<div class="approve-backdrop" @click=${(e) => this.closeApprovalWaiter(e)}></div>`
       : null}
-      <div class="approve-drawer ${is_waiting_approval ? 'open' : ''}">
+      <div class="drawer approve ${is_waiting_approval ? 'open' : ''}">
         <p>
           <strong>Do you want to save time & cut the ${token_symbol} payment approval fees in the future?</strong><br>
-          <small><small>Please select how many posts you want to include in this single approval:</small></small>
+          <small><small>Please choose how many posts you want to include in this single approval:</small></small>
         </p>
         <div class="radio-option">
           <input type="radio" id="approval1" name="approval" ?checked=${selected_approval_plan == 'one'} ?disabled=${selected_approval_plan != 'one' && is_approving} @change=${() => {
@@ -1013,11 +1047,10 @@ class App {
             this.renderPosts();
           }}>
           <label for="approval1">
-            <small><strong>Just this post</strong></small>
-            <small><small><small>You will need to pay the payment approval fee again for your next post. Best if you post rarely.</small></small></small>
+            <small><strong>Just this post</strong></small><br>
+            <small><small>You will need to pay the payment approval fee again for your next post. Best if you post rarely.</small></small>
           </label>
         </div>
-        <br>
         <div class="radio-option">
           <input type="radio" id="approval2" name="approval" ?checked=${selected_approval_plan == 'ten'} ?disabled=${selected_approval_plan != 'ten' && is_approving} @change=${() => {
             const radio = document.getElementById("approval2");
@@ -1025,12 +1058,10 @@ class App {
             this.renderPosts();
           }}>
           <label for="approval2">
-            <small><strong>10 posts</strong></small>
-            <small><small><small>Let's skip the this step & cut the payment approval fees for your next 9 posts.</small></small></small>
-            ${selected_approval_plan !== 'ten'? html`<span class="recommended-tag">Recommended</span>` : null} 
+            <small><strong>10 posts</strong></small><br>
+            <small><small>Let's skip the this step & cut the payment approval fees for your next 9 posts. Recommended.</small></small>
           </label>
         </div>
-        <br>
         <div class="radio-option">
           <input type="radio" id="approval3" name="approval" ?checked=${selected_approval_plan == 'hundred'} ?disabled=${selected_approval_plan != 'hundred' && is_approving} @change=${() => {
             const radio = document.getElementById("approval3");
@@ -1038,16 +1069,19 @@ class App {
             this.renderPosts();
           }}>
           <label for="approval3">
-            <small><strong>100 posts</strong></small>
-            <small><small><small>Enjoy smooth experience & cut the payment approval fees for your next 99 posts. Ideal if you're active.</small></small></small>
+            <small><strong>100 posts</strong></small><br>
+            <small><small>Enjoy smooth experience & cut the payment approval fees for your next 99 posts. Ideal if you're active.</small></small>
           </label>
         </div>
         <br>
-        <button class="send-btn" ?disabled=${is_approving} @click=${(e) => this.approveToken(e)}>
+        <div class="action-bar">
+          <button class="action-btn" ?disabled=${is_approving} @click=${(e) => this.closeApprovalWaiter(e)}>Close</button>
+          <button class="action-btn" ?disabled=${is_approving} @click=${(e) => this.approveToken(e)}>
             ${is_approving
               ? html`<span class="spinner"></span> Approving...`
               : html`Confirm`}
           </button>
+        </div>
       </div>
     `;
   const popup = popup_html ? html`
@@ -1055,41 +1089,27 @@ class App {
     <div class="popup in">${popup_html}</div>
   ` : null;
 
-    render(html`<div class="app-grid">
+    render(html`
     <header class="logo-bar">
       <!-- <img src="assets/logo.svg" alt="Dapp Logo" /> -->
     </header>
-
-    <main class="content-area">
-      ${threads_pane}
-      ${replies_pane}
-    </main>
-
-    <nav class="action-bar">
-      <button class="action-btn" >
-        🔄
-        <span>Refresh</span>
-      </button>
+    ${threads_pane}
+    <div class="action-bar thread">
+      <!--<button class="action-btn" disabled>Refresh</button>-->
       <button class="action-btn" @click=${() => { 
         is_composing_post = true; 
         this.renderPosts();
-      }}>
-        ✍️
-        <span>${is_comments_open? 'Add Reply' : 'New Thread'} </span>
-      </button>
-      <button class="action-btn" @click=${(e) => this.handleCommentClick(e)}>
-        💬
-        <span>${is_comments_open? 'Close' : 'Open'} Replies</span>
-      </button>
-    </nav>
-  </div>
-      ${create_new_thread_form}        
-      ${wallet_selectors}
-      ${cost_and_reasons}
-      ${token_balance_waiter}
-      ${token_balance_waiter_details}
-      ${token_approve_form}
-      ${popup}
+      }}>New Thread</button>
+      <button class="action-btn" @click=${(e) => this.openReplies(e)}>Open Replies</button>
+    </div>
+    ${replies_pane}
+    ${create_new_thread_form}        
+    ${wallet_selectors}
+    ${cost_and_reasons}
+    ${token_balance_waiter}
+    ${token_balance_waiter_details}
+    ${token_approve_form}
+    ${popup}
     `, this.root);
   }
 }
