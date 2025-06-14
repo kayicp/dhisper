@@ -654,7 +654,7 @@ class App {
       <strong>${title}</strong><br>
       <small>${subtitle}</small>
     </p>
-    ${buttons.map(v => html`<button class="view-btn" @click=${v.click}>${v.label}</button>`)}`;
+    ${buttons.map(v => html`<button class="action-btn compact" @click=${v.click}>${v.label}</button>`)}`;
   }
 
   viewTokenDetails(e) {
@@ -788,7 +788,7 @@ class App {
     is_paying = false;
     this.renderPosts();
   }
-
+  // todo: optimistic rendering
   renderPosts() {
     if (this.isSliding) return;
     let current_post;
@@ -908,7 +908,7 @@ class App {
       <div class="drawer cost ${is_seeing_cost ? 'open' : ''}">
         <p>
           <strong>${token_total.msg}</strong>
-          <button class="view-btn" @click=${(e) => this.viewTokenDetails(e)}>Show fee details</button>
+          <button class="action-btn compact" @click=${(e) => this.viewTokenDetails(e)}>Show fee details</button>
           <br>
           <br>
           <small>Other than posting, you also get these <strong>benefits</strong></small>:
@@ -966,7 +966,7 @@ class App {
         <br><small>${token_total.msg}</small>
         <br><small>Your balance: ${is_checking_balance ? html`<span class="spinner"></span>` : normalizeNumber(token_balance / token_power)} ${token_symbol}</small>
         <br>
-        <br>You need to <strong>send ${is_checking_balance ? html`<span class="spinner"></span>` : normalizeNumber((token_total.amount - token_balance) / token_power)} ${token_symbol}</strong> to one of your ${token_symbol} addresses:<br>
+        <br>You need to <strong>send ${is_checking_balance ? html`<span class="spinner"></span>` : normalizeNumber((token_total.amount - token_balance) / token_power)} ${token_symbol}</strong> to one of your ${token_symbol} addresses below:<br>
         <br><strong>• Principal</strong>: <button class="copy-btn ${caller_principal_copied ? "copied" : caller_principal_copy_failed ? 'copy-failed' : ''}" @click=${async (e) => { 
           e.preventDefault();
           try {
@@ -992,7 +992,6 @@ class App {
         <br>
         <small><small><code>${caller_principal? caller_principal.toText() : ''}</code></small></small>
         <textarea id="caller_principal_text" class="copy-only"></textarea>
-        <br>
         <br><strong>• Account</strong>: <button class="copy-btn ${caller_account_copied ? "copied" : caller_account_copy_failed? 'copy-failed' : ''}" @click=${async (e) => { 
           e.preventDefault();
           try {
