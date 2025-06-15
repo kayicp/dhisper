@@ -83,23 +83,19 @@ html, body {
   transition: background 0.5s ease;
 }
 
-.text {
-  text-shadow: 0 0px 10px black;
+.text, .subtext {
+  color: #fff;
+  text-shadow: 0 0 15px rgba(0,0,0),0 0 10px rgba(0,0,0,.75),0 0 5px rgba(0,0,0,.5);
   max-width: 90%;
   font-size: 1.75rem;
-  color: #fff;
   text-align: center;
   font-weight: bold;
 }
 
 .subtext {
-  text-shadow: 0 0px 10px black;
-  max-width: 90%;
+  font-weight: normal;
   font-size: 1rem;
   margin-top: 10px;
-  color: rgba(255, 255, 255, 0.75);
-  text-align: center;
-  font-weight: bold;
 }
 
 .next {
@@ -168,23 +164,20 @@ p {
   bottom: -100%;
   left: 0;
   width: 100%;
-  background: rgba(0,0,0,.3);
-  text-shadow: 0 0 4px rgba(0,0,0,.8),0 0 3px rgba(0,0,0,.7),0 0 2px rgba(0,0,0,.6);
-  border:1.5px solid rgb(0 0 0 / 50%); 
-  box-shadow: 0 0 20px 5px rgb(0 0 0 / 50%), inset 0 0 10px 1px rgb(255 255 255 / 67%);
-  -webkit-backdrop-filter: blur(2px);
-  backdrop-filter: blur(2px);
+  border-top-right-radius: 10px;
+  border-top-left-radius: 10px;
+  background: rgba(255,255,255,.1);
+  border: 1.5px solid rgba(0,0,0,.7);
+  box-shadow: 0 0 30px #000a, inset 0 0 0 1px #fffa, inset 0 0 10px 1px #fffa;
+  -webkit-backdrop-filter: blur(4px) saturate(150%);
+  backdrop-filter: blur(4px)  saturate(150%);
   color: #fff;
+  text-shadow: 0 0 15px rgb(0,0,0),0 0 10px rgba(0,0,0,.75),0 0 5px rgba(0,0,0,.5);
   transition: all .4s ease;
   display: flex;
   flex-direction: column;
   justify-content: flex-start;
-  overflow-y: auto;
-}
-.drawer::after{
-content:""; position:absolute; inset:1px;
-border:1px solid hsl(0deg 0% 100% / 50%);
-pointer-events:none;
+  overflow-y: auto
 }
 
 .drawer.compose {
@@ -244,34 +237,27 @@ pointer-events:none;
 }
 
 .popup {
-  /* keeps it centered */
   position: fixed;
   top: 50%;
   left: 50%;
-  transform: translate(-50%, -50%);
-
-  /* look & feel */
-  background: linear-gradient(to top, #1a1a1a, #2d2d2d);
-  box-shadow: 0 0 24px rgba(0, 0, 0, 0.4);
-  color: #fff;
-  padding: 24px;
-  border-radius: 20px;
-
-  /* sizing that adapts to content */
-  width: fit-content;        /* shrink-wrap horizontally */
-  // max-width: 90vw;           /* but never wider than the viewport */
-  // max-height: 90vh;          /* never taller than the viewport */
-  // min-width: 50vw;
-
-  /* layout */
+  transform: translate(-50%,-50%);
+    border-top-right-radius: 10px;
+    border-top-left-radius: 10px;
+    background: rgba(255,255,255,.1);
+    border: 1.5px solid rgba(0,0,0,.7);
+    box-shadow: 0 0 30px #000a, inset 0 0 0 1px #fffa, inset 0 0 10px 1px #fffa;
+    -webkit-backdrop-filter: blur(4px) saturate(150%);
+    backdrop-filter: blur(4px)  saturate(150%);
+    color: #fff;
+    text-shadow: 0 0 15px rgb(0,0,0),0 0 10px rgba(0,0,0,.75),0 0 5px rgba(0,0,0,.5);
+  padding: 10px;
+  width: fit-content;
   display: flex;
   flex-direction: column;
   justify-content: flex-start;
-
-  /* scrolling & stacking */
   overflow-y: auto;
-  box-sizing: border-box;    /* padding included in fit-content calc */
   z-index: 1000;
+  transition: all .3s ease
 }
 
 @keyframes popup-slide-in {
@@ -511,15 +497,17 @@ option {
   position: absolute;
   width: 100%;
   height: 100%;
-  background: rgb(0 0 0 / 20%);
-  border: 1px solid rgb(0 0 0 / 10%);
-  box-shadow: 0 0 10px #000000;
+  box-shadow: 0 0 10px #000;
   z-index: 50;
   display: flex;
   flex-direction: column;
-  -webkit-backdrop-filter: blur(2px);
-  backdrop-filter: blur(2px);
-  text-shadow: 0 0 4px rgba(0,0,0,.8),0 0 3px rgba(0,0,0,.7),0 0 2px rgba(0,0,0,.6);
+  background: rgba(0,0,0,.1);
+  border: 1.5px solid rgba(0,0,0,.7);
+  box-shadow: 0 0 30px #000a, inset 0 0 0 1px #fffa, inset 0 0 10px 1px #fffa;
+  -webkit-backdrop-filter: blur(4px) saturate(150%);
+  backdrop-filter: blur(4px)  saturate(150%);
+  color: #fff;
+  text-shadow: 0 0 15px rgb(0,0,0),0 0 10px rgba(0,0,0,.75),0 0 5px rgba(0,0,0,.5);
   animation: slideIn .5s ease forwards
 }
 
@@ -547,34 +535,35 @@ option {
 
 .comment-list {
   flex: 1;
-  overflow-y: auto;
+  overflow-y: auto
 }
 
 .comment {
   background: transparent;
   padding: 10px;
   margin: 10px;
-  box-shadow: 0 0 10px rgb(0 0 0 / 50%);
+  box-shadow: 0 0 10px #00000080;
   -webkit-backdrop-filter: blur(2px);
   backdrop-filter: blur(2px);
   font-size: 1rem;
-  color: white;
-  border-top: 1px solid rgba(255,255,255,.25);
-  border-left: 1px solid rgba(255,255,255,.25);
-  border-bottom: 1px solid rgba(0,0,0,.25);
-  border-right: 1px solid rgba(0,0,0,.25);
-  box-shadow: inset 1px 1px 3px #fff6,inset -1px -1px 3px #0006, 0 0 5px rgb(0 0 0 / 50%);
+background: rgba(0,0,0,.1);
+border: 1.5px solid rgba(255,255,255,.7);
+box-shadow: 0 0 20px #fffa, inset 0 0 0 1px #000a, inset 0 0 10px 1px #000a;
+-webkit-backdrop-filter: blur(4px) saturate(150%);
+backdrop-filter: blur(4px)  saturate(150%);
+color: #fff;
+text-shadow: 0 0 15px rgb(0,0,0),0 0 10px rgba(0,0,0,.75),0 0 5px rgba(0,0,0,.5);
 }
-
+// todo: action btn disabled still animate fix this
 .meta {
-  font-size: 0.8rem;
-  color: #ddd;
-  margin-bottom: 5px;
+  font-size: .8rem;
+  color: #fff;
+  margin-bottom: 5px
 }
 
 .content {
   font-size: 1rem;
-  color: #fff;
+  color: #fff
 }
 
 .info-label {
@@ -646,7 +635,7 @@ option {
   margin-right: 10px;
   border: 1.5px solid rgba(0,0,0,.7);
   box-shadow: inset 0 0 0 1px #fffa;
-  background: linear-gradient(rgba(255,255,255,.5019607843),rgba(255,255,255,.3019607843) 45%,rgba(0,0,0,.1019607843) 50%,rgba(0,0,0,.1019607843) 75%,rgba(255,255,255,.5019607843));
+  background: linear-gradient(rgba(255,255,255,.5),rgba(255,255,255,.3) 45%,rgba(0,0,0,.1) 50%,rgba(0,0,0,.1) 75%,rgba(255,255,255,.5));
   -webkit-backdrop-filter: blur(12px) saturate(160%);
   backdrop-filter: blur(12px) saturate(160%);
   transition: all .3s ease
@@ -737,11 +726,11 @@ option {
   font-size: 1rem;
   font-weight: 700;
   color: #fff;
-  text-shadow: 0 0 4px rgba(0,0,0,.8),0 0 3px rgba(0,0,0,.7),0 0 2px rgba(0,0,0,.6);
+  text-shadow: 0 0 15px rgba(0,0,0),0 0 10px rgba(0,0,0,.75),0 0 5px rgba(0,0,0,.5);
   cursor: pointer;
   border: 1.5px solid rgba(0,0,0,.7);
   box-shadow: inset 0 0 0 1px #fffa;
-  background: linear-gradient(rgba(255,255,255,.5019607843),rgba(255,255,255,.3019607843) 45%,rgba(0,0,0,.1019607843) 50%,rgba(0,0,0,.1019607843) 75%,rgba(255,255,255,.5019607843));
+  background: linear-gradient(rgba(255,255,255,.5),rgba(255,255,255,.3) 45%,rgba(0,0,0,.1) 50%,rgba(0,0,0,.1) 75%,rgba(255,255,255,.5));
   -webkit-backdrop-filter: blur(4px);
   backdrop-filter: blur(4px);
   transition: all .3s;
@@ -749,22 +738,18 @@ option {
   overflow: visible
 }
 
-.action-btn.compact {
-  width: auto;
-  display:inline-block;
-  padding: 5px;
-}
-
-.action-btn::after {
+.action-btn::after, .action-btn.failed::after, .action-btn.success::after {
   content: none;
 }
 
-.action-btn::before {
+.action-btn::before, .action-btn.failed::before, .action-btn.success::before {
   content: "";
   position: absolute;
   inset: 0; /* shorthand for top: 0; right: 0; bottom: 0; left: 0; */
   z-index: -1; /* places it behind the button content */
   display: block;
+  opacity: 0;
+  transition: all 0.3s linear;
   box-shadow: 0 0 7px 3px #5dc4f0, inset 0 0 0 1px #fffa;
   background: radial-gradient(
     circle at bottom,
@@ -772,13 +757,13 @@ option {
     transparent 65%
   ),
   linear-gradient(#b6d9ee 50%, #1a6ca1 50%);
-  opacity: 0;
-  transition: opacity 0.3s linear;
 }
 
-.action-btn:hover::before, .action-btn:focus-visible::before {
+.action-btn:hover::before, .action-btn:focus-visible::before,
+.action-btn.failed:hover::before, .action-btn.failed:focus-visible::before,
+.action-btn.success:hover::before, .action-btn.success:focus-visible::before {
   opacity: 1;
-  transition: opacity 0.1s linear;
+  transition: all 0.1s linear;
 }
 
 .action-btn:active::before {
@@ -789,33 +774,36 @@ option {
   ),
   linear-gradient(#86a7bc 50%, #092747 50%);
 }
-// todo: put stronger black shadow behind white texts
 .action-btn:disabled {
   background: transparent;
   opacity: 0.4;
 }
 
-// todo: 
-// todo: finish this copy-btn
-.async-btn {
-  width: auto;
-  display:inline-block;
-  padding: 5px;
-  box-shadow: inset 0 0 0 1px #fffa;
-  background: linear-gradient(#ffffff80, #ffffff4d 45%,
-    #0000001a 50%, #0000001a 75%, #ffffff80);
+.action-btn.failed {
+  background: linear-gradient(
+    #ffffff80,
+    #ffffff4d 45%,
+    #0000001a 50%,
+    #0000001a 75%,
+    #ffffff80
+  ),
+  radial-gradient(
+      circle at -60% 50%,
+      #0007 5% 10%,
+      #0000 50%
+    ),
+  radial-gradient(circle at 160% 50%, #0007 5% 10%, #0000 50%),
+  linear-gradient(#e0a197e5, #cf796a 25% 50%, #d54f36 50%);
 }
 
 .action-btn.failed::before {
-  content: "";
-  position: absolute;
-  inset: 0; /* shorthand for top: 0; right: 0; bottom: 0; left: 0; */
-  z-index: -1; /* places it behind the button content */
-  display: block;
-  opacity: 0;
-  transition: opacity 0.3s linear;
-  box-shadow: 0 0 7px 3px #e68e75, inset 0 0 0 1px #fffa;
-  background: radial-gradient(
+  background: linear-gradient(
+    #ffffff80,
+    #ffffff4d 45%,
+    #0000001a 50%,
+    #0000001a 75%,
+    #ffffff80
+  ), radial-gradient(
     circle at 50% 170%,
     #f4e676 10% 20%,
     #0000 60%
@@ -823,7 +811,90 @@ option {
   radial-gradient(circle at -60% 50%, #000a 5% 10%, #0000 50%),
   radial-gradient(circle at 160% 50%, #000a 5% 10%, #0000 50%),
   linear-gradient(#fb9d8b, #ee6d56 25% 50%, #d42809 50%);
+  box-shadow: 0 0 7px 3px #e68e75, inset 0 0 0 1px #fffa;
 }
+
+.action-btn.failed:active::before {
+  background: linear-gradient(
+    #ffffff80,
+    #ffffff4d 45%,
+    #0000001a 50%,
+    #0000001a 75%,
+    #ffffff80
+  ), radial-gradient(
+    circle at 50% 170%,
+    #dcc03f 10% 20%,
+    #0000 60%
+  ), radial-gradient(circle at -60% 50%, #000 5% 10%, #0000 50%),
+  radial-gradient(circle at 160% 50%, #000 5% 10%, #0000 50%),
+  linear-gradient(#d1a894, #b67562 25% 50%, #7d0d01 50%);
+}
+
+.action-btn.success {
+  background: linear-gradient(
+      #ffffff80,
+      #ffffff4d 45%,
+      #0000001a 50%,
+      #0000001a 75%,
+      #ffffff80
+    ),
+    radial-gradient(
+      circle at -60% 50%,
+      #0007 5% 10%,
+      #0000 50%
+    ),
+    radial-gradient(
+      circle at 160% 50%,
+      #0007 5% 10%,
+      #0000 50%
+    ),
+    linear-gradient(#a8e4b4e5, #6bd18f 25% 50%, #2f9e44 50%);
+}
+
+.action-btn.success::before {
+  background: linear-gradient(
+      #ffffff80,
+      #ffffff4d 45%,
+      #0000001a 50%,
+      #0000001a 75%,
+      #ffffff80
+    ),
+    radial-gradient(
+      circle at 50% 170%,
+      #e6f9a6 10% 20%,
+      #0000 60%
+    ),
+    radial-gradient(circle at -60% 50%, #000a 5% 10%, #0000 50%),
+    radial-gradient(circle at 160% 50%, #000a 5% 10%, #0000 50%),
+    linear-gradient(#a8f8c1, #56d689 25% 50%, #1c7c2a 50%);
+  box-shadow: 0 0 7px 3px #87e8a0, inset 0 0 0 1px #fffa;
+}
+
+.action-btn.success:active::before {
+  background: linear-gradient(
+      #ffffff80,
+      #ffffff4d 45%,
+      #0000001a 50%,
+      #0000001a 75%,
+      #ffffff80
+    ),
+    radial-gradient(
+      circle at 50% 170%,
+      #c8ea44 10% 20%,
+      #0000 60%
+    ),
+    radial-gradient(circle at -60% 50%, #000 5% 10%, #0000 50%),
+    radial-gradient(circle at 160% 50%, #000 5% 10%, #0000 50%),
+    linear-gradient(#a2d8b0, #60ba79 25% 50%, #145c1a 50%);
+}
+
+.action-btn.compact, .action-btn.failed.compact, .action-btn.success.compact {
+  width: auto;
+  display:inline-block;
+  padding: 10px;
+}
+
+// todo: put stronger black shadow behind white texts
 
 *,
 *::before,

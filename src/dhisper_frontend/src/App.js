@@ -967,7 +967,7 @@ class App {
         <br><small>Your balance: ${is_checking_balance ? html`<span class="spinner"></span>` : normalizeNumber(token_balance / token_power)} ${token_symbol}</small>
         <br>
         <br>You need to <strong>send ${is_checking_balance ? html`<span class="spinner"></span>` : normalizeNumber((token_total.amount - token_balance) / token_power)} ${token_symbol}</strong> to one of your ${token_symbol} addresses below:<br>
-        <br><strong>• Principal</strong>: <button class="copy-btn ${caller_principal_copied ? "copied" : caller_principal_copy_failed ? 'copy-failed' : ''}" @click=${async (e) => { 
+        <br><strong>• Principal</strong>: <button class="action-btn ${caller_principal_copied ? "success" : caller_principal_copy_failed ? 'failed' : ''} compact" @click=${async (e) => { 
           e.preventDefault();
           try {
             await navigator.clipboard.writeText(caller_principal.toText());
@@ -992,7 +992,7 @@ class App {
         <br>
         <small><small><code>${caller_principal? caller_principal.toText() : ''}</code></small></small>
         <textarea id="caller_principal_text" class="copy-only"></textarea>
-        <br><strong>• Account</strong>: <button class="copy-btn ${caller_account_copied ? "copied" : caller_account_copy_failed? 'copy-failed' : ''}" @click=${async (e) => { 
+        <br><strong>• Account</strong>: <button class="action-btn ${caller_account_copied ? "success" : caller_account_copy_failed? 'failed' : ''} compact" @click=${async (e) => { 
           e.preventDefault();
           try {
             await navigator.clipboard.writeText(caller_account);
