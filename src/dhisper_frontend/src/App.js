@@ -181,7 +181,6 @@ Brightness=0.299×R+0.587×G+0.114×B
 */
 
 /*
-  todo: use these colors
 #3b00b9
 #1e005d
 
@@ -746,7 +745,6 @@ class App {
     this.renderPosts();
   }
   // todo: add logo
-  // todo: redesign UI (smaller fonts)
 
   closeCompose(e) {
     e.preventDefault();
@@ -788,6 +786,13 @@ class App {
     is_paying = false;
     this.renderPosts();
   }
+
+  closeCostDetails(e) {
+    e.preventDefault();
+    is_viewing_cost_details = false; 
+    this.renderPosts(); 
+  }
+
   // todo: optimistic rendering
   renderPosts() {
     if (this.isSliding) return;
@@ -929,7 +934,7 @@ class App {
           <small><small>Post now & lock in your spot for token rewards!</small></small>
         </p>
         <div class="action-bar">
-          <button class="action-btn" ?disabled=${is_paying} @click=${(e) => this.closePayment(e)}}>Close</button>
+          <button class="action-btn" ?disabled=${is_paying} @click=${(e) => this.closePayment(e)}>Close</button>
           <button class="action-btn" ?disabled=${is_paying} @click=${(e) => {
             is_paying = true;
             this.createNewPost(e);
@@ -939,10 +944,7 @@ class App {
     `;
     const token_balance_waiter_details = html`
     ${is_viewing_cost_details
-    ? html`<div class="cost-breakdown-backdrop" @click=${() => { 
-        is_viewing_cost_details = false; 
-        this.renderPosts(); 
-      }}></div>`
+    ? html`<div class="cost-breakdown-backdrop" @click=${(e) = this.closeCostDetails(e)}></div>`
     : null}
     <div class="drawer cost-breakdown ${is_viewing_cost_details ? 'open' : ''}">
       <p>
@@ -955,6 +957,9 @@ class App {
         <br><br>` : null
       })} = <strong>${token_total.msg}</strong>
       </p>
+      <div class="action-bar">
+        <button class="action-btn" @click=${(e) => this.closeCostDetails(e)}>Close</button>
+      <div>
     </div>
   `;
     const token_balance_waiter = html`${is_waiting_balance
@@ -992,7 +997,7 @@ class App {
         <br>
         <small><small><code>${caller_principal? caller_principal.toText() : ''}</code></small></small>
         <textarea id="caller_principal_text" class="copy-only"></textarea>
-        <br><strong>• Account</strong>: <button class="action-btn ${caller_account_copied ? "success" : caller_account_copy_failed? 'failed' : ''} compact" @click=${async (e) => { 
+        <br><br><strong>• Account</strong>: <button class="action-btn ${caller_account_copied ? "success" : caller_account_copy_failed? 'failed' : ''} compact" @click=${async (e) => { 
           e.preventDefault();
           try {
             await navigator.clipboard.writeText(caller_account);
