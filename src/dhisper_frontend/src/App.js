@@ -357,14 +357,40 @@ class App {
   }
 
   setupScroll() {
+    // Mouse wheel (desktop)
     window.addEventListener('wheel', async (e) => {
       if (this.isSliding) return;
       if (is_composing_post) return;
       if (is_comments_open) return;
-      
+  
       if (e.deltaY > 0 && this.currentIndex < this.posts.length - 1) {
         this.startSlide(this.currentIndex + 1, 'up');
       } else if (e.deltaY < 0 && this.currentIndex > 0) {
+        this.startSlide(this.currentIndex - 1, 'down');
+      }
+    });
+  
+    // Touch (mobile)
+    let touchStartY = 0;
+    let touchEndY = 0;
+  
+    window.addEventListener('touchstart', (e) => {
+      touchStartY = e.changedTouches[0].clientY;
+    });
+  
+    window.addEventListener('touchend', (e) => {
+      if (this.isSliding) return;
+      if (is_composing_post) return;
+      if (is_comments_open) return;
+  
+      touchEndY = e.changedTouches[0].clientY;
+      const deltaY = touchStartY - touchEndY;
+  
+      if (deltaY > 30 && this.currentIndex < this.posts.length - 1) {
+        // Swipe up
+        this.startSlide(this.currentIndex + 1, 'up');
+      } else if (deltaY < -30 && this.currentIndex > 0) {
+        // Swipe down
         this.startSlide(this.currentIndex - 1, 'down');
       }
     });
@@ -821,7 +847,7 @@ class App {
     
     const threads_pane = html`<div class="post-layer current ${this.direction === 'up' ? 'slide-out-up' : this.direction === 'down' ? 'slide-out-down' : ''}">${current_post}</div>
       ${next_post !== null? html`<div class="post-layer next ${this.direction === 'up' ? 'slide-in-up' : 'slide-in-down'}">${next_post}</div>` : null}
-    `;    
+    `;
     const replies_pane = this.posts.length > 0 && is_comments_open && this.activeThread
     ? html`
         <div class="comment-panel slide-in">
@@ -944,7 +970,7 @@ class App {
     `;
     const token_balance_waiter_details = html`
     ${is_viewing_cost_details
-    ? html`<div class="cost-breakdown-backdrop" @click=${(e) = this.closeCostDetails(e)}></div>`
+    ? html`<div class="cost-breakdown-backdrop" @click=${(e) => this.closeCostDetails(e)}></div>`
     : null}
     <div class="drawer cost-breakdown ${is_viewing_cost_details ? 'open' : ''}">
       <p>
@@ -959,7 +985,7 @@ class App {
       </p>
       <div class="action-bar">
         <button class="action-btn" @click=${(e) => this.closeCostDetails(e)}>Close</button>
-      <div>
+      </div>
     </div>
   `;
     const token_balance_waiter = html`${is_waiting_balance

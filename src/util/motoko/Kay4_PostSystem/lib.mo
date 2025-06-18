@@ -37,8 +37,10 @@ module {
 		max_content_size : ?Nat;
 
 		fee_collectors : [Principal];
+		// todo: redesign fee_rates
 		create_fee_rates : [{
-			standard : Text;
+			// todo: rename to create_authorization_types
+			standard : Text; // todo: bring standard under token
 			assets : [{
 				canister_id : Principal;
 				minimum_amount : ?Nat;
@@ -130,6 +132,7 @@ module {
 		metadata : [(Text, Value.Type)];
 		authorization : Kay2.Authorization;
 	};
+	// todo: canister lock error
 	public type CreatePostError = {
 		#GenericError : Error.Type;
 		#ContentTooLarge : { current_size : Nat; maximum_size : Nat };

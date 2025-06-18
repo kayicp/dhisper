@@ -18,6 +18,7 @@ import Queue "../util/motoko/StableCollections/Queue";
 // todo: background process
 // todo: for dhisper, replace the post completely when deleting
 // todo: rename modifications
+// todo: redo Post type? so it will be more future-proof.
 
 shared (install) actor class Canister(
   deploy : {
@@ -135,19 +136,19 @@ shared (install) actor class Canister(
   // };
 
   // todo: separate metadata by standards
-  public shared query func kay4_metadata() : async [(Text, Value.Type)] = async RBTree.array(metadata);
+  // public shared query func kay4_metadata() : async [(Text, Value.Type)] = async RBTree.array(metadata);
 
-  public shared query func kay4_max_threads_size() : async ?Nat = async Value.metaNat(metadata, Kay4.MAX_THREADS);
-  public shared query func kay4_max_replies_size() : async ?Nat = async Value.metaNat(metadata, Kay4.MAX_REPLIES);
+  // public shared query func kay4_max_threads_size() : async ?Nat = async Value.metaNat(metadata, Kay4.MAX_THREADS);
+  // public shared query func kay4_max_replies_size() : async ?Nat = async Value.metaNat(metadata, Kay4.MAX_REPLIES);
   public shared query func kay4_max_content_size() : async ?Nat = async Value.metaNat(metadata, Kay4.MAX_CONTENT);
 
-  public shared query func kay4_fee_collectors() : async [Principal] = async RBTree.arrayKey(Value.getUniquePrincipals(metadata, Kay4.FEE_COLLECTORS, RBTree.empty()));
+  // public shared query func kay4_fee_collectors() : async [Principal] = async RBTree.arrayKey(Value.getUniquePrincipals(metadata, Kay4.FEE_COLLECTORS, RBTree.empty()));
   public shared query func kay4_create_fee_rates() : async [(Text, Value.Type)] = async RBTree.array(Value.getMap(metadata, Kay4.CREATE_FEE_RATES, RBTree.empty()));
-  public shared query func kay4_delete_fee_rates() : async [(Text, Value.Type)] = async RBTree.array(Value.getMap(metadata, Kay4.DELETE_FEE_RATES, RBTree.empty()));
+  // public shared query func kay4_delete_fee_rates() : async [(Text, Value.Type)] = async RBTree.array(Value.getMap(metadata, Kay4.DELETE_FEE_RATES, RBTree.empty()));
 
-  public shared query func kay4_default_take_value() : async ?Nat = async Value.metaNat(metadata, Kay4.DEFAULT_TAKE);
-  public shared query func kay4_max_take_value() : async ?Nat = async Value.metaNat(metadata, Kay4.MAX_TAKE);
-  public shared query func kay4_max_query_batch_size() : async ?Nat = async Value.metaNat(metadata, Kay4.MAX_QUERY_BATCH);
+  // public shared query func kay4_default_take_value() : async ?Nat = async Value.metaNat(metadata, Kay4.DEFAULT_TAKE);
+  // public shared query func kay4_max_take_value() : async ?Nat = async Value.metaNat(metadata, Kay4.MAX_TAKE);
+  // public shared query func kay4_max_query_batch_size() : async ?Nat = async Value.metaNat(metadata, Kay4.MAX_QUERY_BATCH);
 
   // public shared query func kay4_locker
 
@@ -224,180 +225,172 @@ shared (install) actor class Canister(
   };
 
   // todo: error when replies reached max replies per thread
-  public shared ({ caller }) func kay4_create(arg : Kay4.CreatePostArg) : async Result.Type<Nat, Kay4.CreatePostError> {
-    var is_locker = false;
-    try {
-      if (not Kay1.isAvailable(metadata)) return Error.text("Unavailable");
-      if (arg.owners.size() > 0) return Error.text("Owners must be empty");
-      if (arg.metadata.size() > 0) return Error.text("Metadata must be empty");
+  public shared ({ caller }) func kay4_create(arg : Kay4.CreatePostArg) : async Result.Type<Nat, Kay4.CreatePostError> = async try {
+    if (not Kay1.isAvailable(metadata)) return Error.text("Unavailable");
+    if (arg.owners.size() > 0) return Error.text("Owners must be empty");
+    if (arg.metadata.size() > 0) return Error.text("Metadata must be empty");
 
-      switch (arg.thread) {
-        case (?op_id) if (not RBTree.has(posts, Nat.compare, op_id)) return #Err(#UnknownThread);
-        case _ ();
-      };
-      let content = Kay4.cleanText(arg.content);
-      let content_size = Text.size(content);
-      if (content_size == 0) return Error.text("Content cannot be empty");
-      let content_max = Value.getNat(metadata, Kay4.MAX_CONTENT, 0);
-
-      if (arg.files.size() > 0) return Error.text("File system not implemented yet.");
-      // todo later: implement file storing
-      // todo: check locker
-      let (authorization, owner) = switch (arg.authorization) {
-        case (#None auth) (#None { auth with owner = caller }, #ICRC_1 { auth with owner = caller });
-        // todo: redo icrc-1 authorization
-        // case (#ICRC_1 auth) {
-        //   let user = { owner = caller; subaccount = auth.subaccount };
-        //   if (not Account.validate(user)) return Error.text("Invalid caller account");
-
-        //   let token_minimums = Value.getPrincipalMap(metadata, Kay2.TOKEN_MINIMUMS, RBTree.empty());
-        //   let minimum_balance = switch (RBTree.get(token_minimums, Principal.compare, auth.canister_id)) {
-        //     case (?#Nat minimum) minimum;
-        //     case _ return #Err(#Unauthorized(#ICRC_1(#BadCanister { expected_canister_ids = RBTree.arrayKey(token_minimums) })));
-        //   };
-        //   let token = ICRC_1_Types.genActor(auth.canister_id);
-        //   lock(?{ arg with caller });
-        //   is_locker := true;
-        //   let current_balance = await token.icrc1_balance_of(user);
-        //   if (current_balance < minimum_balance) {
-        //     lock(null);
-        //     return #Err(#Unauthorized(#ICRC_1(#BalanceTooSmall { current_balance; minimum_balance })));
-        //   };
-        //   (#ICRC_1 { auth with owner = caller; minimum_balance }, #ICRC_1 user);
-        // };
-        case (#ICRC_2 auth) {
-          let user = { owner = caller; subaccount = auth.subaccount };
-          if (not Account.validate(user)) return Error.text("Invalid caller account");
-          let expected_fee = switch (getFee({ auth with content_size; content_max; fee_key = Kay4.CREATE_FEE_RATES })) {
-            case (#Ok ok) ok;
-            case (#Err err) return #Err err;
-          };
-          let token = ICRC_1_Types.genActor(auth.canister_id);
-          let transfer_from_args = {
-            amount = expected_fee;
-            from = user;
-            to = { owner = self(); subaccount = null };
-            spender_subaccount = null;
-            created_at_time = null;
-            memo = null;
-            fee = null;
-          };
-          lock(?{ arg with caller });
-          is_locker := true;
-          let transfer_from_id = switch (await token.icrc2_transfer_from(transfer_from_args)) {
-            case (#Err err) {
-              lock(null);
-              return #Err(#Unauthorized(#ICRC_2(#TransferFromFailed err)));
-            };
-            case (#Ok ok) ok;
-          };
-          (#ICRC_2 { auth with owner = caller; xfer = transfer_from_id }, #ICRC_1 user);
+    switch (arg.thread) {
+      case (?op_id) switch (RBTree.get(threads, Nat.compare, op_id)) {
+        case (?thread_replies) {
+          let max_replies = Value.getNat(metadata, Kay4.MAX_REPLIES, 0);
+          if (max_replies > 0 and RBTree.size(thread_replies) >= max_replies) return Error.text("Cannot reply anymore; thread has entered read-only mode");
         };
-        case _ return Error.text("ICRC-1 & ICRC-7 authorizations are not implemented yet");
+        case _ return #Err(#UnknownThread);
       };
-      lock(null);
-
-      let new_post_id = post_id;
-      let (thread_id, replies) = switch (arg.thread) {
-        case (?op_id) switch (RBTree.get(threads, Nat.compare, op_id)) {
-          case (?replies) (op_id, RBTree.insert(replies, Nat.compare, new_post_id, ()));
-          case _ (new_post_id, RBTree.empty()); // if thread is gone after user paid, make this a new thread
-        };
-        case _ (new_post_id, RBTree.empty());
-      };
-      threads := RBTree.insert(threads, Nat.compare, thread_id, replies);
-      let new_post = Kay4.createPost({
-        thread = arg.thread;
-        content;
-        authorization;
-
-        timestamp = Time64.nanos();
-        owner;
-      });
-      posts := RBTree.insert(posts, Nat.compare, new_post_id, new_post);
-      post_id += 1;
-      trim();
-      #Ok new_post_id;
-    } catch e {
-      if (is_locker) lock(null);
-      Error.error(e);
+      case _ ();
     };
-  };
+    let content = Kay4.cleanText(arg.content); // remove excessive whitespaces
+    let content_size = Text.size(content);
+    if (content_size == 0) return Error.text("Content cannot be empty");
+    let content_max = Value.getNat(metadata, Kay4.MAX_CONTENT, 0);
+
+    if (arg.files.size() > 0) return Error.text("File system not implemented yet.");
+    // todo later: implement file storing
+    let (authorization, owner) = switch (arg.authorization) {
+      // case (#None auth) (#None { auth with owner = caller }, #ICRC_1 { auth with owner = caller });
+      // todo: redo icrc-1 authorization
+      // case (#ICRC_1 auth) {
+      //   let user = { owner = caller; subaccount = auth.subaccount };
+      //   if (not Account.validate(user)) return Error.text("Invalid caller account");
+
+      //   let token_minimums = Value.getPrincipalMap(metadata, Kay2.TOKEN_MINIMUMS, RBTree.empty());
+      //   let minimum_balance = switch (RBTree.get(token_minimums, Principal.compare, auth.canister_id)) {
+      //     case (?#Nat minimum) minimum;
+      //     case _ return #Err(#Unauthorized(#ICRC_1(#BadCanister { expected_canister_ids = RBTree.arrayKey(token_minimums) })));
+      //   };
+      //   let token = ICRC_1_Types.genActor(auth.canister_id);
+      //   let current_balance = await token.icrc1_balance_of(user);
+      //   if (current_balance < minimum_balance) {
+      //     return #Err(#Unauthorized(#ICRC_1(#BalanceTooSmall { current_balance; minimum_balance })));
+      //   };
+      //   (#ICRC_1 { auth with owner = caller; minimum_balance }, #ICRC_1 user);
+      // };
+      case (#ICRC_2 auth) {
+        let user = { owner = caller; subaccount = auth.subaccount };
+        if (not Account.validate(user)) return Error.text("Invalid caller account");
+        let expected_fee = switch (getFee({ auth with content_size; content_max; fee_key = Kay4.CREATE_FEE_RATES })) {
+          case (#Ok ok) ok;
+          case (#Err err) return #Err err;
+        };
+        let token = ICRC_1_Types.genActor(auth.canister_id);
+        let transfer_from_args = {
+          amount = expected_fee;
+          from = user;
+          to = { owner = self(); subaccount = null };
+          spender_subaccount = null;
+          created_at_time = null;
+          memo = null;
+          fee = null;
+        };
+        let transfer_from_id = switch (await token.icrc2_transfer_from(transfer_from_args)) {
+          case (#Err err) {
+            return #Err(#Unauthorized(#ICRC_2(#TransferFromFailed err)));
+          };
+          case (#Ok ok) ok;
+        };
+        (#ICRC_2 { auth with owner = caller; xfer = transfer_from_id }, #ICRC_1 user);
+      };
+      case _ return Error.text("ICRC-1 & ICRC-7 authorizations are not implemented yet");
+    };
+
+    let new_post_id = post_id;
+    let (thread_id, thread_replies) = switch (arg.thread) {
+      case (?op_id) switch (RBTree.get(threads, Nat.compare, op_id)) {
+        case (?replies) (op_id, RBTree.insert(replies, Nat.compare, new_post_id, ()));
+        case _ (new_post_id, RBTree.empty()); // if thread is gone after user paid, make this a new thread
+      };
+      case _ (new_post_id, RBTree.empty());
+    };
+    threads := RBTree.insert(threads, Nat.compare, thread_id, thread_replies);
+    let new_post = Kay4.createPost({
+      thread = arg.thread;
+      content;
+      authorization;
+
+      timestamp = Time64.nanos();
+      owner;
+    });
+    posts := RBTree.insert(posts, Nat.compare, new_post_id, new_post);
+    post_id += 1;
+    trim();
+    #Ok new_post_id;
+  } catch e Error.error(e);
 
   // public shared ({ caller }) func kay4_modify(arg : Kay4.ModifyPostArg) : async Result.Type<(), Kay4.ModifyPostError> = async Error.text("'kay4_modify' is not implemented yet");
 
-  public shared ({ caller }) func kay4_delete(arg : Kay4.DeletePostArg) : async Result.Type<(), Kay4.DeletePostError> {
-    var is_locker = false;
-    try {
-      if (not Kay1.isAvailable(metadata)) return Error.text("Unavailable");
-      let the_post = switch (RBTree.get(posts, Nat.compare, arg.id)) {
-        case (?found) found;
-        case _ return #Err(#UnknownPost);
-      };
-      let post_owners = Kay4.getOwners(the_post);
-      let authorization = switch (arg.authorization) {
-        case (#None auth) (#None { auth with owner = caller });
-        // todo: rethink icrc1 delete
-        // case (#ICRC_1 auth) {
-        //   let user = { owner = caller; subaccount = auth.subaccount };
-        //   if (not Account.validate(user)) return Error.text("Invalid caller account");
+  // public shared ({ caller }) func kay4_delete(arg : Kay4.DeletePostArg) : async Result.Type<(), Kay4.DeletePostError> {
+  //   var is_locker = false;
+  //   try {
+  //     if (not Kay1.isAvailable(metadata)) return Error.text("Unavailable");
+  //     let the_post = switch (RBTree.get(posts, Nat.compare, arg.id)) {
+  //       case (?found) found;
+  //       case _ return #Err(#UnknownPost);
+  //     };
+  //     let post_owners = Kay4.getOwners(the_post);
+  //     let authorization = switch (arg.authorization) {
+  //       case (#None auth) (#None { auth with owner = caller });
+  //       // todo: rethink icrc1 delete
+  //       // case (#ICRC_1 auth) {
+  //       //   let user = { owner = caller; subaccount = auth.subaccount };
+  //       //   if (not Account.validate(user)) return Error.text("Invalid caller account");
 
-        //   let token_minimums = Value.getPrincipalMap(metadata, Kay2.TOKEN_MINIMUMS, RBTree.empty());
-        //   let minimum_balance = switch (RBTree.get(token_minimums, Principal.compare, auth.canister_id)) {
-        //     case (?#Nat minimum) minimum;
-        //     case _ return #Err(#Unauthorized(#ICRC_1(#BadCanister { expected_canister_ids = RBTree.arrayKey(token_minimums) })));
-        //   };
-        //   let token = ICRC_1_Types.genActor(auth.canister_id);
-        //   lock(?{ arg with caller });
-        //   is_locker := true;
-        //   let current_balance = await token.icrc1_balance_of(user);
-        //   if (current_balance < minimum_balance) {
-        //     lock(null);
-        //     return #Err(#Unauthorized(#ICRC_1(#BalanceTooSmall { current_balance; minimum_balance })));
-        //   };
-        //   #ICRC_1 { auth with owner = caller; minimum_balance };
-        // };
-        case (#ICRC_2 auth) {
-          let user = { owner = caller; subaccount = auth.subaccount };
-          if (not RBTree.has(post_owners, Kay2.compareIdentity, #ICRC_1 user)) return Error.text("Caller is not the owner of the post");
+  //       //   let token_minimums = Value.getPrincipalMap(metadata, Kay2.TOKEN_MINIMUMS, RBTree.empty());
+  //       //   let minimum_balance = switch (RBTree.get(token_minimums, Principal.compare, auth.canister_id)) {
+  //       //     case (?#Nat minimum) minimum;
+  //       //     case _ return #Err(#Unauthorized(#ICRC_1(#BadCanister { expected_canister_ids = RBTree.arrayKey(token_minimums) })));
+  //       //   };
+  //       //   let token = ICRC_1_Types.genActor(auth.canister_id);
+  //       //   lock(?{ arg with caller });
+  //       //   is_locker := true;
+  //       //   let current_balance = await token.icrc1_balance_of(user);
+  //       //   if (current_balance < minimum_balance) {
+  //       //     lock(null);
+  //       //     return #Err(#Unauthorized(#ICRC_1(#BalanceTooSmall { current_balance; minimum_balance })));
+  //       //   };
+  //       //   #ICRC_1 { auth with owner = caller; minimum_balance };
+  //       // };
+  //       case (#ICRC_2 auth) {
+  //         let user = { owner = caller; subaccount = auth.subaccount };
+  //         if (not RBTree.has(post_owners, Kay2.compareIdentity, #ICRC_1 user)) return Error.text("Caller is not the owner of the post");
 
-          let expected_fee = switch (getFee({ auth with content_size = 0; content_max = 0; fee_key = Kay4.DELETE_FEE_RATES })) {
-            case (#Ok ok) ok;
-            case (#Err err) return #Err err;
-          };
-          let token = ICRC_1_Types.genActor(auth.canister_id);
-          let transfer_from_args = {
-            amount = expected_fee;
-            from = user;
-            to = { owner = self(); subaccount = null };
-            spender_subaccount = null;
-            created_at_time = null;
-            memo = null;
-            fee = null;
-          };
-          lock(?{ arg with caller });
-          is_locker := true;
-          let transfer_from_id = switch (await token.icrc2_transfer_from(transfer_from_args)) {
-            case (#Err err) {
-              lock(null);
-              return #Err(#Unauthorized(#ICRC_2(#TransferFromFailed err)));
-            };
-            case (#Ok ok) ok;
-          };
-          #ICRC_2 { auth with owner = caller; xfer = transfer_from_id };
-        };
-        case _ return Error.text("ICRC-7 authorizations not implemented yet");
-      };
-      lock(null);
-      let deleted = Kay4.deletePost(the_post, { authorization; timestamp = Time64.nanos() });
-      posts := RBTree.insert(posts, Nat.compare, arg.id, deleted);
-      trim();
-      #Ok;
-    } catch e {
-      if (is_locker) lock(null);
-      Error.error(e);
-    };
-  };
+  //         let expected_fee = switch (getFee({ auth with content_size = 0; content_max = 0; fee_key = Kay4.DELETE_FEE_RATES })) {
+  //           case (#Ok ok) ok;
+  //           case (#Err err) return #Err err;
+  //         };
+  //         let token = ICRC_1_Types.genActor(auth.canister_id);
+  //         let transfer_from_args = {
+  //           amount = expected_fee;
+  //           from = user;
+  //           to = { owner = self(); subaccount = null };
+  //           spender_subaccount = null;
+  //           created_at_time = null;
+  //           memo = null;
+  //           fee = null;
+  //         };
+  //         lock(?{ arg with caller });
+  //         is_locker := true;
+  //         let transfer_from_id = switch (await token.icrc2_transfer_from(transfer_from_args)) {
+  //           case (#Err err) {
+  //             lock(null);
+  //             return #Err(#Unauthorized(#ICRC_2(#TransferFromFailed err)));
+  //           };
+  //           case (#Ok ok) ok;
+  //         };
+  //         #ICRC_2 { auth with owner = caller; xfer = transfer_from_id };
+  //       };
+  //       case _ return Error.text("ICRC-7 authorizations not implemented yet");
+  //     };
+  //     lock(null);
+  //     let deleted = Kay4.deletePost(the_post, { authorization; timestamp = Time64.nanos() });
+  //     posts := RBTree.insert(posts, Nat.compare, arg.id, deleted);
+  //     trim();
+  //     #Ok;
+  //   } catch e {
+  //     if (is_locker) lock(null);
+  //     Error.error(e);
+  //   };
+  // };
 
   public shared query func kay4_threads(prev : ?Nat, take : ?Nat) : async [Nat] {
     let _take = Pager.cleanTake(take, Value.metaNat(metadata, Kay4.MAX_TAKE), Value.metaNat(metadata, Kay4.DEFAULT_TAKE), RBTree.size(threads));
@@ -411,19 +404,19 @@ shared (install) actor class Canister(
     let _take = Pager.cleanTake(take, Value.metaNat(metadata, Kay4.MAX_TAKE), Value.metaNat(metadata, Kay4.DEFAULT_TAKE), RBTree.size(replies));
     RBTree.pageKey(replies, Nat.compare, prev, _take);
   };
-  public shared query func kay4_posts(by_owner : ?Kay2.Identity, prev : ?Nat, take : ?Nat) : async [Nat] = async switch by_owner {
-    case (?owned_by) switch (RBTree.get(owners, Kay2.compareIdentity, owned_by)) {
-      case (?found) {
-        let _take = Pager.cleanTake(take, Value.metaNat(metadata, Kay4.MAX_TAKE), Value.metaNat(metadata, Kay4.DEFAULT_TAKE), RBTree.size(found));
-        RBTree.pageKey(found, Nat.compare, prev, _take);
-      };
-      case _ [];
-    };
-    case _ {
-      let _take = Pager.cleanTake(take, Value.metaNat(metadata, Kay4.MAX_TAKE), Value.metaNat(metadata, Kay4.DEFAULT_TAKE), RBTree.size(posts));
-      RBTree.pageKey(posts, Nat.compare, prev, _take);
-    };
-  };
+  // public shared query func kay4_posts(by_owner : ?Kay2.Identity, prev : ?Nat, take : ?Nat) : async [Nat] = async switch by_owner {
+  //   case (?owned_by) switch (RBTree.get(owners, Kay2.compareIdentity, owned_by)) {
+  //     case (?found) {
+  //       let _take = Pager.cleanTake(take, Value.metaNat(metadata, Kay4.MAX_TAKE), Value.metaNat(metadata, Kay4.DEFAULT_TAKE), RBTree.size(found));
+  //       RBTree.pageKey(found, Nat.compare, prev, _take);
+  //     };
+  //     case _ [];
+  //   };
+  //   case _ {
+  //     let _take = Pager.cleanTake(take, Value.metaNat(metadata, Kay4.MAX_TAKE), Value.metaNat(metadata, Kay4.DEFAULT_TAKE), RBTree.size(posts));
+  //     RBTree.pageKey(posts, Nat.compare, prev, _take);
+  //   };
+  // };
   // public shared query func kay4_threads_of(post_ids : [Nat]) : async [?Nat] {
   //   let batcher = Batcher.buffer<?Nat>(post_ids.size(), Value.metaNat(metadata, Kay4.MAX_QUERY_BATCH));
   //   label looping for (id in post_ids.vals()) {
@@ -489,11 +482,11 @@ shared (install) actor class Canister(
   //   batcher.finalize();
   // };
 
-  public shared query func kay4_authorizations_of(post_ids : [Nat]) : async [?Kay2.Authorized] = async Kay4.batchPostId(post_ids, posts, metadata, Kay4.getAuthorization);
-  public shared query func kay4_authorizations_at(postvers : [Kay4.PostVersion]) : async [?Kay2.Authorized] = async Kay4.batchPostVersion(postvers, posts, metadata, #LastValue, Kay4.trackAuthorization);
+  // public shared query func kay4_authorizations_of(post_ids : [Nat]) : async [?Kay2.Authorized] = async Kay4.batchPostId(post_ids, posts, metadata, Kay4.getAuthorization);
+  // public shared query func kay4_authorizations_at(postvers : [Kay4.PostVersion]) : async [?Kay2.Authorized] = async Kay4.batchPostVersion(postvers, posts, metadata, #LastValue, Kay4.trackAuthorization);
 
   public shared query func kay4_timestamps_of(post_ids : [Nat]) : async [?Nat64] = async Kay4.batchPostId(post_ids, posts, metadata, Kay4.getTimestamp);
-  public shared query func kay4_timestamps_at(postvers : [Kay4.PostVersion]) : async [?Nat64] = async Kay4.batchPostVersion(postvers, posts, metadata, #LastValue, Kay4.trackTimestamp);
+  // public shared query func kay4_timestamps_at(postvers : [Kay4.PostVersion]) : async [?Nat64] = async Kay4.batchPostVersion(postvers, posts, metadata, #LastValue, Kay4.trackTimestamp);
 
   // public shared query func kay4_parent_hashes_of(post_ids : [Nat]) : async [?Blob] = async Kay4.batchPostId(post_ids, posts, metadata, Kay4.getPhash);
   // public shared query func kay4_parent_hashes_at(postvers : [Kay4.PostVersion]) : async [?Blob] = async Kay4.batchPostVersion(postvers, posts, metadata, #LastValue, Kay4.trackPhash);
@@ -519,10 +512,10 @@ shared (install) actor class Canister(
   //   case (?found) Kay4.trackOwners(found, version_id, #Modification, prev, take, metadata);
   //   case _ [];
   // };
-  public shared query func kay4_owners_at(post_id : Nat, version_id : Nat, prev : ?Kay2.Identity, take : ?Nat) : async [Kay2.Identity] = async switch (RBTree.get(posts, Nat.compare, post_id)) {
-    case (?found) Kay4.trackOwners(found, version_id, #LastValue, prev, take, metadata);
-    case _ [];
-  };
+  // public shared query func kay4_owners_at(post_id : Nat, version_id : Nat, prev : ?Kay2.Identity, take : ?Nat) : async [Kay2.Identity] = async switch (RBTree.get(posts, Nat.compare, post_id)) {
+  //   case (?found) Kay4.trackOwners(found, version_id, #LastValue, prev, take, metadata);
+  //   case _ [];
+  // };
   public shared query func kay4_owners_of(post_id : Nat, prev : ?Kay2.Identity, take : ?Nat) : async [Kay2.Identity] = async switch (RBTree.get(posts, Nat.compare, post_id)) {
     case (?found) Kay4.pageOwners(found, prev, take, metadata);
     case _ [];
