@@ -1,5 +1,5 @@
 
-# Design Document: Dhisper Backend Canister (ICP Smart Contract)
+# Design Document: Dhisper Backend Canister
 
 ## Overview
 
@@ -18,7 +18,6 @@ type Kay4.Init
 The canister is initialized with configurable parameters:
 
 * `max_threads_size`, `max_replies_size`, `max_content_size`: Controls for pagination and content length limits.
-* `fee_collectors`: Principals authorized to collect fees from canister's balance.
 * `create_fee_rates`: Customizable fee structures based on content and asset size.
 * `default_take_value`, `max_take_value`, `max_query_batch_size`: Defaults and ceilings for pagination in queries.
 
@@ -110,7 +109,7 @@ type Authorized = {
 ```
 Authorization is enforced during mutating operations like `kay4_create`.
 
-Caller will provide `Authorization`, then the canister will store the `Authorized` if the authorization process passed.
+Caller will provide `Authorization`, and if it passed, then the canister will store the `Authorized`.
 
 Used for:
 
@@ -135,11 +134,13 @@ Supports user identities with optional subaccounting for fine-grained access. Co
 
 #### Purpose
 
-Creates a new **post** (optionally within a thread), **validates authorization**, **charges fees**, and stores the post with an auto-incrementing ID and initial content version.
+Creates a new **post** (optionally within a thread), validates **authorization**, charges **fees**, and stores the post with a unique ID and content versioning.
 
-#### Detailed Execution Flow
+---
 
-##### 1. **Thread Existence & Capacity Check**
+#### Execution Flow
+
+##### 1. Thread Validation and Capacity Enforcement
 
 ```motoko
 switch (arg.thread) {
@@ -155,12 +156,15 @@ switch (arg.thread) {
 };
 ```
 
-* If `arg.thread` is present:
-  * Check if thread exists.
-  * Enforce `max_replies` from metadata.
-* Else, a **new thread** is implied.
+* If a thread ID is provided:
 
-##### 2. **Content Cleanup & Size Check**
+  * Verify the thread exists.
+  * Enforce maximum replies limit from metadata (`MAX_REPLIES`).
+* Otherwise, the post starts a new thread.
+
+---
+
+##### 2. Content Normalization and Validation
 
 ```motoko
 let content = Kay4.cleanText(arg.content);
@@ -168,19 +172,23 @@ if (Text.size(content) == 0) return Error.text("Content cannot be empty");
 let content_max = Value.getNat(metadata, Kay4.MAX_CONTENT, 0);
 ```
 
-* Content is normalized (whitespace-trimmed).
-* Empty content is rejected.
-* `MAX_CONTENT` is retrieved for later fee calculation.
+* Trims/normalizes content.
+* Rejects empty content.
+* Retrieves content size limit (`MAX_CONTENT`) for fee calculation.
 
-##### 3. **File Attachments (TODO)**
+---
+
+##### 3. File Attachment Restriction (Placeholder)
 
 ```motoko
-if (arg.files.size() > 0) return Error.text("File system not implemented yet.");
+if (arg.files.size() > 0) return Error.text("Dhisper is text-only for now. File system is not ready yet.");
 ```
 
-* Early rejection for file uploads (planned for future implementation).
+* File attachments are currently not supported.
 
-##### 4. **Authorization & Fee Charging**
+---
+
+##### 4. Authorization and Fee Processing
 
 ```motoko
 let (authorized, identity) = switch (arg.authorization) {
@@ -209,12 +217,14 @@ let (authorized, identity) = switch (arg.authorization) {
 };
 ```
 
-* Validates caller's `ICRC-2` authorization.
-* Retrieves required fee from metadata (`CREATE_FEE_RATES`).
-* Transfers fee using `icrc2_transfer_from`.
-* If the transfer fails, returns a `#Unauthorized` error with reason.
+* Validates authorization (only `ICRC_2` supported for now).
+* Retrieves expected fee using `getFee` (detailed below).
+* Charges fee via `icrc2_transfer_from`.
+* Returns #Error if fee transfer fails.
 
-##### 5. **Thread Handling**
+---
+
+##### 5. Thread Update or Initialization
 
 ```motoko
 let (thread_id, thread_replies) = switch (arg.thread) {
@@ -226,10 +236,12 @@ let (thread_id, thread_replies) = switch (arg.thread) {
 };
 ```
 
-* If post is a reply and the thread exists, append it.
-* If thread disappeared after fee payment, fallback: create new thread with same `PostId`.
+* If replying to an existing thread, append the replies.
+* If original thread was deleted after fee payment, fallback to create this post as a new thread.
 
-##### 6. **Post Creation and Insertion**
+---
+
+##### 6. Post Construction and Registration
 
 ```motoko
 threads := RBTree.insert(...);
@@ -239,139 +251,164 @@ post_id += 1;
 #Ok new_post_id;
 ```
 
-* Post is constructed using `Kay4.createPost` helper.
-* Stored into `posts` with current `post_id`.
-* Thread is updated with the new post.
-* `post_id` counter is incremented.
+* Post is created & hashed via `Kay4.createPost` (detailed below).
+* Added to `posts` and `threads`.
+* Global `post_id` counter is incremented.
 
 ---
 
-#### Inputs
+#### Inputs: `Kay4.CreatePostArg`
 
-##### `Kay4.CreatePostArg`
-
-| Field           | Description                                 |
-| --------------- | ------------------------------------------- |
-| `thread`        | Optional ID of the thread to reply to       |
-| `content`       | Text content to post                        |
-| `files`         | Attached files (currently disallowed)       |
-| `owners`        | Future ownership configuration (disallowed) |
-| `metadata`      | Additional metadata (disallowed)            |
-| `authorization` | Authorization object (must be `ICRC_2` for now)     |
+| Field           | Description                                |
+| --------------- | ------------------------------------------ |
+| `thread: ?Nat`        | Optional ID of thread being replied to     |
+| `content: Text`       | Text content to post                       |
+| `files: [Kay3.CreateArg]`         | File attachments (currently disallowed)    |
+| `owners: [Kay2.Identity]`        | Future ownership config (currently unused) |
+| `metadata: [(Text, Value.Type)]`      | Additional metadata (currently unused)     |
+| `authorization: Kay2.Authorization` | Authorization data (must be `ICRC_2` for now)      |
 
 ---
 
 #### Outputs
 
-* **Success**: `#Ok(Nat)` – the ID of the newly created post.
-* **Failure**: `#Err(Kay4.CreatePostError)` – specific error enum.
+* `#Ok(Nat)`: ID of the newly created post.
+* `#Err(Kay4.CreatePostError)`: Specific error variant.
 
 ---
 
-#### Possible Errors
+#### Errors
 
-| Variant                          | Description                                   |
-| -------------------------------- | --------------------------------------------- |
-| `#GenericError`                  | Wraps internal failures or text errors        |
-| `#UnknownThread`                 | Supplied `thread` ID doesn't exist            |
-| `#ContentTooLarge`               | Not currently triggered, but may be in future |
-| `#Unauthorized`                  | Fee validation or Transfer failed             |
-| `#Locked`, `#FileTooLarge`, etc. | Reserved for future (e.g., file features)     |
+| Variant            | Meaning                                            |
+| ------------------ | -------------------------------------------------- |
+| `#GenericError`    | Catch-all for internal errors or validation issues |
+| `#UnknownThread`   | Thread does not exist                              |
+| `#Unauthorized`    | Fee transfer failed or bad authorization           |
+| `#ContentTooLarge` | (Planned) Content exceeds allowed size             |
+| `#Locked`, etc.    | Reserved for future use (files, locking, etc.)     |
 
 ---
 
 #### State Mutations
 
-| Variable  | Change                         |
-| --------- | ------------------------------ |
-| `posts`   | New post inserted at `post_id` |
-| `threads` | Thread ID updated or created   |
-| `post_id` | Incremented by one             |
+| Variable  | Update Description                     |
+| --------- | -------------------------------------- |
+| `posts`   | Adds the newly created post            |
+| `threads` | Updates existing thread or creates new |
+| `post_id` | Auto-incremented to assign new post ID |
 
-### `func getFee({ canister_id : Principal; fee : ?Nat; content_size : Nat; content_max : Nat; fee_key : Text; }) : Result.Type<Nat, { #Unauthorized : Kay2.Unauthorized; #GenericError : Error.Type }>`
+---
+
+### `func getFee(...)`
+
+```motoko
+func getFee({ ... }) : Result.Type<Nat, { #Unauthorized : Kay2.Unauthorized; #GenericError : Error.Type }>
+```
 
 #### Purpose
 
-This function computes the expected fee for posting content based on the size of the content and metadata configuration. It ensures the caller-provided fee matches the expected value based on system-defined parameters.
+Validates and calculates the expected fee for a post based on system metadata and content size. Ensures the user-supplied fee matches expected logic.
+
+---
 
 #### Inputs
 
-* `canister_id`: The ICRC-2 token canister used for fee payment.
-* `fee`: The fee amount provided by the user (optional).
-* `content_size`: Actual content length (in bytes).
-* `content_max`: Maximum size allowed before overage fees apply.
-* `fee_key`: Key used to retrieve fee configuration metadata from the system.
+| Parameter      | Description                                                            |
+| -------------- | ---------------------------------------------------------------------- |
+| `canister_id: Principal`  | ICRC-2 token canister ID for fee transfer                              |
+| `fee: ?Nat`          | User-supplied fee amount (optional)                                    |
+| `content_size: Nat` | Size of the content in bytes                                           |
+| `content_max: Nat`  | Max content length before overage fees apply                           |
+| `fee_key: Text`      | Metadata key used to look up fee rules (e.g., `kay4:create_fee_rates`) |
+
+---
 
 #### Outputs
 
-* `#Ok expected_fee`: If the fee is valid and acceptable.
-* `#Err`: If the fee is incorrect or the configuration is missing or unauthorized.
+* `#Ok(expected_fee)`: Correct fee calculated from rules.
+* `#Err(...)`: Unauthorized, incorrect fee, or metadata issue.
+
+---
 
 #### Logic
 
-1. Fetch fee rate metadata for the specified `fee_key` (e.g., `"kay4:create_fee_rates"`).
-2. Extract the ICRC-2-specific fee configuration using the `ICRC_2_KEY` ("ICRC-2").
-3. Validate that the provided `canister_id` is authorized.
+1. Load fee rates from metadata using `fee_key`.
+2. Extract `ICRC-2`-specific fee mapping.
+3. Validate the `canister_id` is allowed.
 4. Extract:
 
-   * `minimum_amount`: The minimum base fee.
-   * Optionally, `additional_amount_numerator` and `additional_byte_denominator` for overage fee calculations if `content_size > content_max`.
-5. Compute the `expected_fee`:
+   * `minimum_amount`: Flat base fee
+   * `additional_amount_numerator` / `additional_byte_denominator`: Overage parameters
+5. Calculate:
 
-   * `expected_fee = minimum_amount + (excess_bytes * additional_amount_numerator / additional_byte_denominator)`
-6. If a fee was provided by the caller, verify it matches `expected_fee`.
-
-#### Example Metadata Structure
-
-```json
-{ "kay4:create_fee_rates": 
-  { "ICRC-2": 
-    { "ryjl3-tyaaa-aaaaa-aaaba-cai": 
-      { "minimum_amount": 100000,
-        "additional_amount_numerator": 1,
-        "additional_byte_denominator": 1 }}}}
-```
-
-#### Failure Cases
-
-* Missing metadata keys (`minimum_amount`, etc.)
-* Unrecognized token canister ID
-* Mismatched fee values
-
-#### Design Notes
-
-* Content size overages are billed proportionally using the `additional_amount_numerator` per `additional_byte_denominator`.
-* This mechanism supports flexible, metadata-driven fee strategies without hardcoding values in logic.
-* Supports future extension to other token standards or dynamic pricing models.
+   * `overage = (content_size - content_max)`
+   * `expected_fee = minimum_amount + (overage * numerator / denominator)`
+6. If a `fee` is provided, ensure it matches `expected_fee`.
 
 ---
 
-### `public func Kay4.createPost({ thread : ?ThreadId; content : Text; authorization : Kay2.Authorized; timestamp : Nat64; owner : Kay2.Identity; }) : Kay4.Post`
+#### Example Fee Rate Metadata
+
+```json
+{
+  "kay4:create_fee_rates": {
+    "ICRC-2": {
+      "ryjl3-tyaaa-aaaaa-aaaba-cai": {
+        "minimum_amount": 100000,
+        "additional_amount_numerator": 1,
+        "additional_byte_denominator": 1
+      }
+    }
+  }
+}
+```
+
+---
+
+#### Failure Conditions
+
+* Fee metadata missing or misconfigured
+* `canister_id` not authorized
+* Mismatched provided fee
+
+---
+
+#### Design Considerations
+
+* Flexible, metadata-driven fee logic
+* Supports overage-based pricing
+* Future-ready for supporting other standards or other tokens
+
+---
+
+### `public func Kay4.createPost(...) : Kay4.Post`
 
 #### Purpose
 
-Constructs a `Kay4.Post` object with:
+Constructs and returns a fully-formed `Kay4.Post`:
 
-* **Thread association**, **content**, **authorization**, and **ownership** initialization,
-* Support for **versioning** (via RBTree),
-* An **integrity hash** over all relevant fields.
-
----
-
-#### Security Implications
-
-* The use of hashed identity and auth ensures **tamper-proofing** of creator info.
-* Each component (auth, content, owners) is **individually hashed** and then globally hashed.
-* Enables cryptographic proof or audit trail of post history.
+* Includes thread ID, content, ownership, timestamp
+* Supports multiple versioned fields (auth, content, etc.)
+* Produces a final cryptographic hash over post components
 
 ---
 
-#### Design Takeaway
+#### Hash Design
 
-This `createPost` architecture lays the groundwork for:
+* Uses `Hasher.sha256` on each component (`authorization`, `content`, `owners`)
+* Combines hashes into a unified tree and computes final post hash
+* Enables integrity checking and tamper detection
 
-* **Immutability** via versioning.
-* **Auditability** with precise hash tracking.
+---
+
+#### Versioning Strategy
+
+Each component (e.g., content, authorization) is stored in its own `RBTree`, allowing:
+
+* Future updates with full version history
+* Deterministic and hashable state evolution
+
+---
 
 ## Queries
 
