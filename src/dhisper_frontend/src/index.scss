@@ -633,7 +633,7 @@ text-shadow: 0 0 15px rgb(0,0,0),0 0 10px rgba(0,0,0,.75),0 0 5px rgba(0,0,0,.5)
   display: grid;
   height: 50px;
   width: 100%;
-  box-shadow: 0 0 10px #00000088;
+  box-shadow: 0 0 10px #ffffff88;
   border: 1px solid rgba(255,255,255,.5);
   grid-template-columns: repeat(auto-fit,minmax(0,1fr));
   -webkit-backdrop-filter: blur(4px);
@@ -645,7 +645,8 @@ text-shadow: 0 0 15px rgb(0,0,0),0 0 10px rgba(0,0,0,.75),0 0 5px rgba(0,0,0,.5)
   bottom: 0
 }
 .action-bar.thread {
-  z-index: 45
+  z-index: 45;
+  box-shadow: 0 0 10px #00000088;
 }
 
 // https://github.com/khang-nd/7.css/blob/main/gui/_window.scss

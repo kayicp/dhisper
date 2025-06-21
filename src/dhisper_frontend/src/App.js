@@ -16,10 +16,10 @@ let caller_account_copied = false;
 let caller_account_copy_failed = false;
 
 const post_payment_pitches = [
-  "Most want to post. Few are willing to pay... Are you like most?",
-  "The 'Pay' button? It's a filter... Most people never make it past this point",
-  "The fee is not a cost, it's a commitment... Which most people lack.",
-  "Only the bold will pay.",
+  html`Most want to post. <strong>Few</strong> are willing to pay...<br><br>Are you like most?`,
+  html`The 'Pay' button? It's a <strong>filter</strong>... <br><br>Most people never make it past this point.`,
+  html`The fee is not a cost, it's a <strong>commitment</strong>...<br><br>Which most people lack.`,
+  html`Only the <strong>bold</strong> will pay.`,
 ];
 
 // jordan, don, appl, mboro
@@ -33,20 +33,20 @@ const post_input_pitches = [
 const sign_in_pitches = [
   { header: "You're either in the room, or outside it.", body: "Sign in. Only members allowed past this point." },
   { header: "This is where things get real.", body: "If you're not signed in, you're just background noise."},
-  { header: "Step in. Fully.", body: "Your voice deserves to be heard—by choice, not chance."},
+  { header: "Step in. Fully.", body: "Your voice deserves to be heard... by choice, not chance."},
   { header: "Be a real one.", body: "Posting here means showing up. Log in or log off."},
 ]; 
 
 const top_up_pitches = [
   { header: "Top up. Lock in. Close the deal.", body: "This is pocket change for people who mean business." },
-  { header: "If you want it to matter, it should cost something.", body: "Add funds—not just for access, but for meaning."},
+  { header: "If you want it to matter, it should cost something.", body: "Add funds... not just for access, but for meaning."},
   { header: "Just enough. Just right.", body: "Top up once. Let every post carry weight."},
   { header: "You want to post? Fuel it.", body: "No noise here... just the ones who show they mean it."},
 ]; 
 
 const approval_pitches = [
-  { header: "Buy once. Post like a machine.", body: "Set it and forget it... because time is the one thing you don't get back." },
-  { header: "Invest in future words.", body: "You never know when the next important thing you'll say will come. Be ready."},
+  { header: "Approve once. Post like a machine.", body: "Set it and forget it... because time is the one thing you don't get back." },
+  { header: "Approve future posts.", body: "You never know when the next important thing you'll say will come. Be ready."},
   { header: "Smarter posting starts now.", body: "Approve once. Create without friction."},
   { header: "Cut the delay. Light it faster.", body: "One approval. Many strikes. Keep the fire going."},
 ]; 
@@ -915,6 +915,7 @@ class App {
             <button class="action-btn" @click=${(e) => this.closeReplies(e)}>Close</button>
             <button class="action-btn" @click=${() => { 
               is_composing_post = true; 
+              post_input_pitch = randomPitch(post_input_pitches);
               this.renderPosts();
             }}>Add Reply</button>
           </div>
@@ -929,7 +930,7 @@ class App {
         <p>
           <strong>${post_input_pitch.header}</strong><br>
           <small><small>${post_input_pitch.body}</small></small>
-          <br>
+          <br><br>
           <input type="text" placeholder="${post_input_pitch.placeholder}"
               @input=${(e) => this.updateCharCount(e)} 
               .value=${post_content || ''}/>
@@ -1104,8 +1105,10 @@ class App {
       : null}
       <div class="drawer approve ${is_waiting_approval ? 'open' : ''}">
         <p>
-          <strong>${approval_pitch.header} Save time and cut down on ${token_symbol} approval fees.</strong><br>
-          <small><small>${approval_pitch.body}<br>Choose how many future posts to include in this one-time approval:</small></small>
+          <strong>${approval_pitch.header}</strong><br>
+          <small><small>Save time and cut down on ${token_symbol} approval fees.</small></small><br>
+          <br>
+          <small><strong>Choose</strong> how many future posts to include in this one-time approval:</small>
         </p>
         <div class="radio-option">
           <input type="radio" id="approval1" name="approval" ?checked=${selected_approval_plan == 'one'} ?disabled=${selected_approval_plan != 'one' && is_approving} @change=${() => {
@@ -1146,7 +1149,7 @@ class App {
           <button class="action-btn success" ?disabled=${is_approving} @click=${(e) => this.approveToken(e)}>
             ${is_approving
               ? html`<span class="spinner"></span> Approving...`
-              : html`Confirm`}
+              : html`Approve`}
           </button>
         </div>
       </div>
@@ -1165,6 +1168,7 @@ class App {
       <!--<button class="action-btn" disabled>Refresh</button>-->
       <button class="action-btn" @click=${() => { 
         is_composing_post = true;
+        post_input_pitch = randomPitch(post_input_pitches);
         this.renderPosts();
       }}>New Thread</button>
       <button class="action-btn" @click=${(e) => this.openReplies(e)}>Open Replies</button>
