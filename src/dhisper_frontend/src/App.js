@@ -15,6 +15,52 @@ let caller_account = '';
 let caller_account_copied = false;
 let caller_account_copy_failed = false;
 
+const post_payment_pitches = [
+  "Most want to post. Few are willing to pay... Are you like most?",
+  "The 'Pay' button? It's a filter... Most people never make it past this point",
+  "The fee is not a cost, it's a commitment... Which most people lack.",
+  "Only the bold will pay.",
+];
+
+// jordan, don, appl, mboro
+const post_input_pitches = [
+  { header: "Got some words that'll stop the scroll?", body: "This is where the noise ends... and your influence begins.", placeholder: "Drop something they'll remember." },
+  { header: "If it matters, put it in writing.", body: "What you say here could live longer than you.", placeholder: "Make it worth reading. Make it worth paying for." },
+  { header: "Speak with intention.", body: "A post should be simple. Honest. Worth something.", placeholder: "Say less. Mean more." },
+  { header: "Light one up.", body: "Every word should leave a mark. Make yours burn.", placeholder: "Write like you've got something to prove." },
+];
+
+const sign_in_pitches = [
+  { header: "You're either in the room, or outside it.", body: "Sign in. Only members allowed past this point." },
+  { header: "This is where things get real.", body: "If you're not signed in, you're just background noise."},
+  { header: "Step in. Fully.", body: "Your voice deserves to be heard—by choice, not chance."},
+  { header: "Be a real one.", body: "Posting here means showing up. Log in or log off."},
+]; 
+
+const top_up_pitches = [
+  { header: "Top up. Lock in. Close the deal.", body: "This is pocket change for people who mean business." },
+  { header: "If you want it to matter, it should cost something.", body: "Add funds—not just for access, but for meaning."},
+  { header: "Just enough. Just right.", body: "Top up once. Let every post carry weight."},
+  { header: "You want to post? Fuel it.", body: "No noise here... just the ones who show they mean it."},
+]; 
+
+const approval_pitches = [
+  { header: "Buy once. Post like a machine.", body: "Set it and forget it... because time is the one thing you don't get back." },
+  { header: "Invest in future words.", body: "You never know when the next important thing you'll say will come. Be ready."},
+  { header: "Smarter posting starts now.", body: "Approve once. Create without friction."},
+  { header: "Cut the delay. Light it faster.", body: "One approval. Many strikes. Keep the fire going."},
+]; 
+
+function randomPitch(arr) {
+  return arr[Math.floor(Math.random() * arr.length)];
+}
+
+let post_payment_pitch = randomPitch(post_payment_pitches);
+let post_input_pitch = randomPitch(post_input_pitches);
+let sign_in_pitch = randomPitch(sign_in_pitches);
+let top_up_pitch = randomPitch(top_up_pitches);
+let approval_pitch = randomPitch(approval_pitches);
+
 let is_composing_post = false;
 let is_seeing_cost = false;
 let is_paying = false;
@@ -154,7 +200,7 @@ function convertTyped(typed) {
 
     case 'ValueMap':
       // payload: Array<[Type, Type]>
-      // we’ll return a JS Map so non-string keys are allowed
+      // we'll return a JS Map so non-string keys are allowed
       return new Map(
         payload.map(([k, v]) => [ convertTyped(k), convertTyped(v) ])
       );
@@ -876,21 +922,28 @@ class App {
       ` : null;
       // todo: fix the small text since we've using 1.25 rem
       // todo: reduce to 1rem on default text
-    const create_new_thread_form = html`
+    const create_new_post_form = html`
       ${is_composing_post
       ? html`<div class="compose-backdrop" @click=${(e) => this.closeCompose(e)}></div>` : null}
       <div class="drawer compose ${is_composing_post ? 'open' : ''}">
         <p>
-          <strong>${is_comments_open ? 'Add a Reply' : 'Create New Thread'}</strong><br>
+          <strong>${post_input_pitch.header}</strong><br>
+          <small><small>${post_input_pitch.body}</small></small>
           <br>
-          <input type="text" placeholder="${is_comments_open ? 'What do you think about the thread?' : "What's on your mind?"}"
+          <input type="text" placeholder="${post_input_pitch.placeholder}"
               @input=${(e) => this.updateCharCount(e)} 
               .value=${post_content || ''}/>
           <span class="char-count">${char_count}</span>
         </p>
         <div class="action-bar">
           <button class="action-btn" ?disabled=${is_posting} @click=${(e) => this.closeCompose(e)}>Close</button>
-          <button class="action-btn" ?disabled=${is_posting} @click=${(e) => this.createNewPost(e)}>${is_posting
+          <button class="action-btn success" ?disabled=${is_posting} @click=${(e) => {
+            post_payment_pitch = randomPitch(post_payment_pitches);
+            sign_in_pitch = randomPitch(sign_in_pitches);
+            top_up_pitch = randomPitch(top_up_pitches);
+            approval_pitch = randomPitch(approval_pitches);
+            this.createNewPost(e);
+          }}>${is_posting
             ? html`<span class="spinner"></span> Posting...`
             : html`➤ Post`}</button>
         </div>
@@ -902,15 +955,14 @@ class App {
       : null}
       <div class="drawer wallet ${this.isSelectingWallet ? 'open' : ''}">
         <p>
-          <strong>Sign in to start</strong>
-          <br>
-          <small><small>No account or password needed</small></small>
+          <strong>${sign_in_pitch.header}</strong><br>
+          <small><small>${sign_in_pitch.body}</small></small>
         </p>
         <div class="action-bar">
           <button class="action-btn" @click=${(e) => this.closeLogin(e)}>Close</button>
-          <button class="action-btn" ?disabled=${this.isConnectingWallet} @click=${(e) => this.loginInternetIdentity(e)}>${this.isConnectingWallet
+          <button class="action-btn success" ?disabled=${this.isConnectingWallet} @click=${(e) => this.loginInternetIdentity(e)}>${this.isConnectingWallet
             ? html`<span class="spinner"></span> Connecting...`
-            : html`Continue with Internet Identity`}</button>
+            : html`Connect via Internet Identity`}</button>
         </div>
       </div>
     `;
@@ -940,28 +992,12 @@ class App {
         <p>
           <strong>${token_total.msg}</strong>
           <button class="action-btn compact" @click=${(e) => this.viewTokenDetails(e)}>Show fee details</button>
-          <br>
-          <br>
-          <small>Other than posting, you also get these <strong>benefits</strong></small>:
-          <br>
-          <br>
-          <strong>• Exclusive Community</strong>
-          <br>
-          <small><small>Only committed users; no spams, trolls or bots. Enjoy genuine conversations.</small></small>
-          <br>
-          <br>
-          <strong>• No Ads & No Trackers</strong>
-          <br>
-          <small><small>Scroll, post, & chat without ad banners, ad pop-ups, or hidden data-mining.</small></small>
-          <br>
-          <br>
-          <strong>• Token Airdrops</strong>
-          <br>
-          <small><small>Post now & lock in your spot for token rewards!</small></small>
+          <br><br>
+          <small>${post_payment_pitch}</small>
         </p>
         <div class="action-bar">
           <button class="action-btn" ?disabled=${is_paying} @click=${(e) => this.closePayment(e)}>Close</button>
-          <button class="action-btn" ?disabled=${is_paying} @click=${(e) => {
+          <button class="action-btn success" ?disabled=${is_paying} @click=${(e) => {
             is_paying = true;
             this.createNewPost(e);
           }}>${is_paying ? html`<span class="spinner"></span> Paying...` : html`Pay`}</button>
@@ -993,8 +1029,9 @@ class App {
     : null}
     <div class="drawer balance ${is_waiting_balance ? 'open' : ''}">
       <p>
-        <strong>Oops, you don't have enough ${token_symbol}</strong><br>
-        <br><small>${token_total.msg}</small>
+        <strong>${top_up_pitch.header}</strong><br>
+        <small><small>${top_up_pitch.body}</small></small>
+        <br><br><small>${token_total.msg}</small>
         <br><small>Your balance: ${is_checking_balance ? html`<span class="spinner"></span>` : normalizeNumber(token_balance / token_power)} ${token_symbol}</small>
         <br>
         <br>You need to <strong>send ${is_checking_balance ? html`<span class="spinner"></span>` : normalizeNumber((token_total.amount - token_balance) / token_power)} ${token_symbol}</strong> to one of your ${token_symbol} addresses below:<br>
@@ -1049,11 +1086,11 @@ class App {
         <br><small><small><code>${caller_account}</code></small></small>
         <textarea id="caller_account_text" class="copy-only"></textarea>
         <br>
-        <br><small><small>No rush, we'll be right here waiting for your top-up.</small></small>
+        <br><small><small>After you've topped up, let us know.</small></small>
       </p>
       <div class="action-bar">
         <button class="action-btn" ?disabled=${is_checking_balance} @click=${(e) => this.closeBalanceWaiter(e)}>Close</button>
-        <button class="action-btn" ?disabled=${is_checking_balance} @click=${(e) => this.createNewPost(e)}>
+        <button class="action-btn success" ?disabled=${is_checking_balance} @click=${(e) => this.createNewPost(e)}>
           ${is_checking_balance
             ? html`<span class="spinner"></span> Checking...`
             : html`I have sent`}
@@ -1067,8 +1104,8 @@ class App {
       : null}
       <div class="drawer approve ${is_waiting_approval ? 'open' : ''}">
         <p>
-          <strong>Do you want to save time & cut the ${token_symbol} payment approval fees in the future?</strong><br>
-          <small><small>Please choose how many posts you want to include in this single approval:</small></small>
+          <strong>${approval_pitch.header} Save time and cut down on ${token_symbol} approval fees.</strong><br>
+          <small><small>${approval_pitch.body}<br>Choose how many future posts to include in this one-time approval:</small></small>
         </p>
         <div class="radio-option">
           <input type="radio" id="approval1" name="approval" ?checked=${selected_approval_plan == 'one'} ?disabled=${selected_approval_plan != 'one' && is_approving} @change=${() => {
@@ -1078,7 +1115,7 @@ class App {
           }}>
           <label for="approval1">
             <small><strong>Just this post</strong></small><br>
-            <small><small>You will need to pay the payment approval fee again for your next post. Best if you post rarely.</small></small>
+            <small><small>You'll need to approve again next time. Good if you rarely post.</small></small>
           </label>
         </div>
         <div class="radio-option">
@@ -1089,7 +1126,7 @@ class App {
           }}>
           <label for="approval2">
             <small><strong>10 posts</strong></small><br>
-            <small><small>Let's skip the this step & cut the payment approval fees for your next 9 posts. Recommended.</small></small>
+            <small><small>Skip approval steps and save fees for your next 9 posts. <strong>Recommended.</strong></small></small>
           </label>
         </div>
         <div class="radio-option">
@@ -1100,13 +1137,13 @@ class App {
           }}>
           <label for="approval3">
             <small><strong>100 posts</strong></small><br>
-            <small><small>Enjoy smooth experience & cut the payment approval fees for your next 99 posts. Ideal if you're active.</small></small>
+            <small><small>Enjoy a smoother, faster experience for the long run. <strong>Best for active posters.</strong></small></small>
           </label>
         </div>
         <br>
         <div class="action-bar">
           <button class="action-btn" ?disabled=${is_approving} @click=${(e) => this.closeApprovalWaiter(e)}>Close</button>
-          <button class="action-btn" ?disabled=${is_approving} @click=${(e) => this.approveToken(e)}>
+          <button class="action-btn success" ?disabled=${is_approving} @click=${(e) => this.approveToken(e)}>
             ${is_approving
               ? html`<span class="spinner"></span> Approving...`
               : html`Confirm`}
@@ -1121,19 +1158,19 @@ class App {
 
     render(html`
     <header class="logo-bar">
-      <!-- <img src="assets/logo.svg" alt="Dapp Logo" /> -->
+      <img src="dhisper_logo.svg" alt="Dhisper Logo"/>
     </header>
     ${threads_pane}
     <div class="action-bar thread">
       <!--<button class="action-btn" disabled>Refresh</button>-->
       <button class="action-btn" @click=${() => { 
-        is_composing_post = true; 
+        is_composing_post = true;
         this.renderPosts();
       }}>New Thread</button>
       <button class="action-btn" @click=${(e) => this.openReplies(e)}>Open Replies</button>
     </div>
     ${replies_pane}
-    ${create_new_thread_form}        
+    ${create_new_post_form}        
     ${wallet_selectors}
     ${cost_and_reasons}
     ${token_balance_waiter}
