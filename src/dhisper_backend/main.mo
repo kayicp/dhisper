@@ -295,16 +295,24 @@ shared (install) actor class Canister(
     };
 
     let new_post_id = post_id;
-    let (thread_id, thread_replies) = switch (arg.thread) {
+    let (thread_id, thread_id_hash, thread_replies) = switch (arg.thread) {
       case (?op_id) switch (RBTree.get(threads, Nat.compare, op_id)) {
-        case (?replies) (op_id, RBTree.insert(replies, Nat.compare, new_post_id, ()));
-        case _ (new_post_id, RBTree.empty()); // if thread is gone after user paid, make this a new thread
+        case (?replies) {
+          let last_bump = switch (RBTree.max(replies)) {
+            case (?(latest_reply, _)) latest_reply;
+            case _ op_id;
+          };
+          bumps := RBTree.delete(bumps, Nat.compare, last_bump);
+          (op_id, ?op_id, RBTree.insert(replies, Nat.compare, new_post_id, ()));
+        };
+        case _ (new_post_id, null, RBTree.empty()); // if thread is gone after user paid, make this a new thread
       };
-      case _ (new_post_id, RBTree.empty());
+      case _ (new_post_id, null, RBTree.empty());
     };
+    bumps := RBTree.insert(bumps, Nat.compare, new_post_id, thread_id);
     threads := RBTree.insert(threads, Nat.compare, thread_id, thread_replies);
     let new_post = Kay4.createPost({
-      thread = arg.thread;
+      thread = thread_id_hash;
       content;
       authorization;
 
@@ -313,7 +321,7 @@ shared (install) actor class Canister(
     });
     posts := RBTree.insert(posts, Nat.compare, new_post_id, new_post);
     post_id += 1;
-    trim();
+    // trim();
     #Ok new_post_id;
   } catch e Error.error(e);
 
@@ -403,6 +411,10 @@ shared (install) actor class Canister(
     };
     let _take = Pager.cleanTake(take, Value.metaNat(metadata, Kay4.MAX_TAKE), Value.metaNat(metadata, Kay4.DEFAULT_TAKE), RBTree.size(replies));
     RBTree.pageKey(replies, Nat.compare, prev, _take);
+  };
+  public shared query func kay4_bumps(prev : ?Nat, take : ?Nat) : async [Nat] {
+    let _take = Pager.cleanTake(take, Value.metaNat(metadata, Kay4.MAX_TAKE), Value.metaNat(metadata, Kay4.DEFAULT_TAKE), RBTree.size(bumps));
+    RBTree.pageValueReverse(bumps, Nat.compare, prev, _take);
   };
   // public shared query func kay4_posts(by_owner : ?Kay2.Identity, prev : ?Nat, take : ?Nat) : async [Nat] = async switch by_owner {
   //   case (?owned_by) switch (RBTree.get(owners, Kay2.compareIdentity, owned_by)) {

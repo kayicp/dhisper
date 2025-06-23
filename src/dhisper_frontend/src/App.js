@@ -15,6 +15,10 @@ let caller_account = '';
 let caller_account_copied = false;
 let caller_account_copy_failed = false;
 
+/*
+  snap scroll
+*/
+
 const post_payment_pitches = [
   html`Most want to post. <strong>Few</strong> are willing to pay...<br><br>Are you like most?`,
   html`The 'Pay' button? It's a <strong>filter</strong>... <br><br>Most people never make it past this point.`,
@@ -328,6 +332,20 @@ async function prepareTokens() {
       this.renderPosts();
     }
   };
+}
+
+function focusPostInput() {
+  const input = document.getElementById('post_input');
+  const submit = document.getElementById('post_btn'); // The button under input
+
+  setTimeout(() => {
+    input.blur();
+    input.focus();
+    input.click();
+    setTimeout(() => {
+      submit.scrollIntoView({ behavior: 'smooth', block: 'end' });
+    }, 300); // Wait for keyboard to show (tweak for device)
+  }, 400); // Wait for slide-in animation to end
 }
 
 class App {
@@ -898,7 +916,6 @@ class App {
     ? html`
         <div class="comment-panel slide-in">
           <div class="comment-list">
-            <div class="action-size"></div>
             <div class="comment">
               <div class="meta">#${this.activeThread.id} • ${shortPrincipal(this.activeThread.owner)}${this.activeThread.timestamp ? ' • ' + timeAgo(this.activeThread.timestamp) : ''}</div>
               <div class="content">${this.activeThread.content}</div>
@@ -909,14 +926,14 @@ class App {
                 <div class="content">${comment.content}</div>
               </div>
             `)}
-            <div class="action-size"></div>
           </div>
           <div class="action-bar sticky">
             <button class="action-btn" @click=${(e) => this.closeReplies(e)}>Close</button>
-            <button class="action-btn" @click=${() => { 
+            <button class="action-btn" @click=${() => {
               is_composing_post = true; 
               post_input_pitch = randomPitch(post_input_pitches);
               this.renderPosts();
+              focusPostInput();
             }}>Add Reply</button>
           </div>
         </div>
@@ -931,14 +948,14 @@ class App {
           <strong>${post_input_pitch.header}</strong><br>
           <small><small>${post_input_pitch.body}</small></small>
           <br><br>
-          <input type="text" placeholder="${post_input_pitch.placeholder}"
+          <input id="post_input" type="text" placeholder="${post_input_pitch.placeholder}"
               @input=${(e) => this.updateCharCount(e)} 
               .value=${post_content || ''}/>
           <span class="char-count">${char_count}</span>
         </p>
         <div class="action-bar">
           <button class="action-btn" ?disabled=${is_posting} @click=${(e) => this.closeCompose(e)}>Close</button>
-          <button class="action-btn success" ?disabled=${is_posting} @click=${(e) => {
+          <button id="post_btn" class="action-btn success" ?disabled=${is_posting} @click=${(e) => {
             post_payment_pitch = randomPitch(post_payment_pitches);
             sign_in_pitch = randomPitch(sign_in_pitches);
             top_up_pitch = randomPitch(top_up_pitches);
@@ -1170,6 +1187,7 @@ class App {
         is_composing_post = true;
         post_input_pitch = randomPitch(post_input_pitches);
         this.renderPosts();
+        focusPostInput();
       }}>New Thread</button>
       <button class="action-btn" @click=${(e) => this.openReplies(e)}>Open Replies</button>
     </div>

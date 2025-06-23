@@ -28,22 +28,6 @@ body {
   }
 }
 
-form {
-  display: flex;
-  justify-content: center;
-  gap: 0.5em;
-  flex-flow: row wrap;
-  max-width: 40vw;
-  margin: auto;
-  align-items: baseline;
-}
-
-button[type="submit"] {
-  padding: 5px 20px;
-  margin: 10px auto;
-  float: right;
-}
-
 .browser-warning {
   display: none;
 }
@@ -51,16 +35,18 @@ button[type="submit"] {
 html, body {
   margin: 0;
   padding: 0;
-  overflow: hidden;
-  height: 100%;
+  overflow-x: hidden; /* allow vertical scroll, block only horizontal */
+  height: auto; /* let the document grow naturally */
+  min-height: 100vh;
   font-family: sans-serif;
 }
 
 #root {
   position: relative;
-  height: 100vh;
-  width: 100vw;
-  overflow: hidden;
+  min-height: 100vh;
+  height: auto;
+  width: 100%;
+  overflow-x: hidden;
 }
 
 .post-layer {
@@ -73,8 +59,9 @@ html, body {
   justify-content: center;
   align-items: center;
   z-index: 1;
-  transition: background 0.5s ease;
+  transition: background .5s ease
 }
+
 
 .text, .subtext {
   color: #fff;
@@ -425,12 +412,13 @@ input[type=text]:focus {
 
 .comment-panel {
   position: absolute;
-  width: 100%;
+  top: 0;
+  left: 0;
   height: 100%;
+  width: 100%;
+  display: flex;
   box-shadow: 0 0 10px #000;
   z-index: 50;
-  display: flex;
-  flex-direction: column;
   background: rgba(0,0,0,.1);
   border: 1.5px solid rgba(0,0,0,.7);
   box-shadow: 0 0 30px #000a, inset 0 0 0 1px #fffa, inset 0 0 10px 1px #fffa;
@@ -464,8 +452,10 @@ input[type=text]:focus {
 }
 
 .comment-list {
+  padding-top: 50px;
   flex: 1;
-  overflow-y: auto
+  overflow-y: auto;
+  padding-bottom: 50px;
 }
 
 .comment {
@@ -513,7 +503,6 @@ text-shadow: 0 0 15px rgb(0,0,0),0 0 10px rgba(0,0,0,.75),0 0 5px rgba(0,0,0,.5)
   cursor: pointer;
   outline: none;
   transition: all .3s ease;
-  overflow: hidden
 }
 
 .copy-btn:hover {
@@ -614,9 +603,9 @@ text-shadow: 0 0 15px rgb(0,0,0),0 0 10px rgba(0,0,0,.75),0 0 5px rgba(0,0,0,.5)
   background: rgba(255,255,255,.1);
   box-shadow: 0 0 30px #000a, inset 0 0 0 1px #fffa, inset 0 0 10px 1px #fffa;
   border: 1.5px solid rgba(0,0,0,.7);
-  -webkit-backdrop-filter: blur(4px) saturate(140%);
-    backdrop-filter: blur(4px) saturate(140%);
-  z-index: 2000;
+  -webkit-backdrop-filter: blur(4px) saturate(125%);
+  backdrop-filter: blur(4px) saturate(125%);
+  z-index: 2000
 }
 
 .logo-bar img {
@@ -624,16 +613,11 @@ text-shadow: 0 0 15px rgb(0,0,0),0 0 10px rgba(0,0,0,.75),0 0 5px rgba(0,0,0,.5)
   filter: drop-shadow(0 0 5px rgb(0,0,0))
 }
 
-.action-size {
-  height: 50px;
-  width: 100%
-}
-
 .action-bar {
   display: grid;
   height: 50px;
   width: 100%;
-  box-shadow: 0 0 10px #ffffff88;
+  box-shadow: 0 0 10px #fff8;
   border: 1px solid rgba(255,255,255,.5);
   grid-template-columns: repeat(auto-fit,minmax(0,1fr));
   -webkit-backdrop-filter: blur(4px);
@@ -642,11 +626,11 @@ text-shadow: 0 0 15px rgb(0,0,0),0 0 10px rgba(0,0,0,.75),0 0 5px rgba(0,0,0,.5)
 
 .action-bar.thread, .action-bar.sticky {
   position: fixed;
-  bottom: 0
+  bottom: 0;
 }
 .action-bar.thread {
   z-index: 45;
-  box-shadow: 0 0 10px #00000088;
+  box-shadow: 0 0 10px #0008
 }
 
 // https://github.com/khang-nd/7.css/blob/main/gui/_window.scss
@@ -669,7 +653,6 @@ text-shadow: 0 0 15px rgb(0,0,0),0 0 10px rgba(0,0,0,.75),0 0 5px rgba(0,0,0,.5)
   background: linear-gradient(rgba(255,255,255,.5),rgba(255,255,255,.3) 45%,rgba(0,0,0,.1) 50%,rgba(0,0,0,.1) 75%,rgba(255,255,255,.5));
   transition: all .3s;
   z-index: 0;
-  overflow: visible
 }
 
 .action-btn::after, .action-btn.failed::after, .action-btn.success::after {
