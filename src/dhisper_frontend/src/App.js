@@ -49,10 +49,10 @@ const top_up_pitches = [
 ]; 
 
 const approval_pitches = [
-  { header: "Approve once. Post like a machine.", body: "Set it and forget it... because time is the one thing you don't get back." },
-  { header: "Approve future posts.", body: "You never know when the next important thing you'll say will come. Be ready."},
+  { header: "Approve once. Save more.", body: "Set it and forget it... because time is the one thing you don't get back." },
+  // { header: "Approve future posts.", body: "You never know when the next important thing you'll say will come. Be ready."},
   { header: "Smarter posting starts now.", body: "Approve once. Create without friction."},
-  { header: "Cut the delay. Light it faster.", body: "One approval. Many strikes. Keep the fire going."},
+  { header: "Cut the delay. Post faster.", body: "One approval. Many strikes. Keep the fire going."},
 ]; 
 
 function randomPitch(arr) {
@@ -945,11 +945,19 @@ class App {
       ? html`<div class="compose-backdrop" @click=${(e) => this.closeCompose(e)}></div>` : null}
       <div class="drawer compose ${is_composing_post ? 'open' : ''}">
         <p>
-          <strong>${post_input_pitch.header}</strong><br>
-          <small><small>${post_input_pitch.body}</small></small>
+          <strong>${
+            // post_input_pitch.header
+            is_comments_open? 'Add a Reply' : 'Create a New Thread.'
+          }</strong><br>
+          <small><small>${
+            // post_input_pitch.body
+            is_comments_open? 'Got a question or a better opinion?' : 'Say something worth reading.'
+          }</small></small>
           <br><br>
-          <input id="post_input" type="text" placeholder="${post_input_pitch.placeholder}"
-              @input=${(e) => this.updateCharCount(e)} 
+          <input id="post_input" type="text" placeholder="${
+            // post_input_pitch.placeholder
+            'Write here to start'
+          }" @input=${(e) => this.updateCharCount(e)} 
               .value=${post_content || ''}/>
           <span class="char-count">${char_count}</span>
         </p>
@@ -962,8 +970,8 @@ class App {
             approval_pitch = randomPitch(approval_pitches);
             this.createNewPost(e);
           }}>${is_posting
-            ? html`<span class="spinner"></span> Posting...`
-            : html`➤ Post`}</button>
+            ? html`<span class="spinner"></span> Sending...`
+            : html`➤ Send`}</button>
         </div>
       </div>
     `;
@@ -973,14 +981,20 @@ class App {
       : null}
       <div class="drawer wallet ${this.isSelectingWallet ? 'open' : ''}">
         <p>
-          <strong>${sign_in_pitch.header}</strong><br>
-          <small><small>${sign_in_pitch.body}</small></small>
+          <strong>${
+            // sign_in_pitch.header
+            'Real posts come from real people.'
+          }</strong><br>
+          <small><small>${
+            // sign_in_pitch.body
+            "Let's make yours real too."
+          }</small></small>
         </p>
         <div class="action-bar">
           <button class="action-btn" @click=${(e) => this.closeLogin(e)}>Close</button>
           <button class="action-btn success" ?disabled=${this.isConnectingWallet} @click=${(e) => this.loginInternetIdentity(e)}>${this.isConnectingWallet
             ? html`<span class="spinner"></span> Connecting...`
-            : html`Connect via Internet Identity`}</button>
+            : html`Sign in via Internet ID`}</button>
         </div>
       </div>
     `;
@@ -1047,8 +1061,11 @@ class App {
     : null}
     <div class="drawer balance ${is_waiting_balance ? 'open' : ''}">
       <p>
-        <strong>${top_up_pitch.header}</strong><br>
-        <small><small>${top_up_pitch.body}</small></small>
+        <strong>${
+          // top_up_pitch.header
+          "Just a top-up. Then you're in."
+        }</strong>
+        <!-- <br><small><small>${top_up_pitch.body}</small></small> -->
         <br><br><small>${token_total.msg}</small>
         <br><small>Your balance: ${is_checking_balance ? html`<span class="spinner"></span>` : normalizeNumber(token_balance / token_power)} ${token_symbol}</small>
         <br>
@@ -1111,7 +1128,7 @@ class App {
         <button class="action-btn success" ?disabled=${is_checking_balance} @click=${(e) => this.createNewPost(e)}>
           ${is_checking_balance
             ? html`<span class="spinner"></span> Checking...`
-            : html`I have sent`}
+            : html`Top-up Done`}
         </button>
       </div>
     </div>
