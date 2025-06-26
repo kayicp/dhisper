@@ -16,43 +16,46 @@ let caller_account_copied = false;
 let caller_account_copy_failed = false;
 
 /*
-  snap scroll
+  todo: snap scroll
 */
 
 const post_payment_pitches = [
-  html`Most want to post. <strong>Few</strong> are willing to pay...<br><br>Are you like most?`,
-  html`The 'Pay' button? It's a <strong>filter</strong>... <br><br>Most people never make it past this point.`,
-  html`The fee is not a cost, it's a <strong>commitment</strong>...<br><br>Which most people lack.`,
-  html`Only the <strong>bold</strong> will pay.`,
+  html`Value your words.`,
+  html`Bots post for free. We don't.`,
+  html`Reach everyone. No followers needed.`,
+  html`Claim your space.`,
+  html`It's a noise filter.`,
+  html`This is the next internet. Leave your mark.`,
 ];
 
-// jordan, don, appl, mboro
-const post_input_pitches = [
-  { header: "Got some words that'll stop the scroll?", body: "This is where the noise ends... and your influence begins.", placeholder: "Drop something they'll remember." },
-  { header: "If it matters, put it in writing.", body: "What you say here could live longer than you.", placeholder: "Make it worth reading. Make it worth paying for." },
-  { header: "Speak with intention.", body: "A post should be simple. Honest. Worth something.", placeholder: "Say less. Mean more." },
-  { header: "Light one up.", body: "Every word should leave a mark. Make yours burn.", placeholder: "Write like you've got something to prove." },
+const thread_input_pitches = [
+  { header: "", body: "If it matters, put it in writing.", placeholder: "Drop something they'll remember." },
+  { header: "", body: "Say something worth reading.", placeholder: "Got some words that'll stop the scroll?" },
+  { header: "", body: "You're not posting. You're publishing.", placeholder: "What should they read about?" },
+];
+
+const reply_input_pitches = [
+  { header: "", body: "Resurrect the thread.", placeholder: "What do you have to say?" },
+  { header: "", body: "Can you take it further?", placeholder: "Amplify the signal..." },
+  { header: "", body: "Let's keep it going.", placeholder: "Make the thread longer..." },
 ];
 
 const sign_in_pitches = [
-  { header: "You're either in the room, or outside it.", body: "Sign in. Only members allowed past this point." },
-  { header: "This is where things get real.", body: "If you're not signed in, you're just background noise."},
-  { header: "Step in. Fully.", body: "Your voice deserves to be heard... by choice, not chance."},
-  { header: "Be a real one.", body: "Posting here means showing up. Log in or log off."},
+  { header: "You're the producer, not the product.", body: "Let's prove that." },
+  { header: "AI is flooding the Internet.", body: "Good thing you found the higher ground. Join us."},
+  { header: "Algorithms ruined the Internet.", body: "Good thing we don't have algorithms here. Join us."},
+  { header: "Welcome to the Real Internet.", body: "No noise. Only signals."},
+  { header: "First-time user?", body: "Don't worry, everyone here can reach everyone."},
+  { header: "Not popular?", body: "Popularity is not the Truth; we only want to read what you wrote."},
 ]; 
 
 const top_up_pitches = [
-  { header: "Top up. Lock in. Close the deal.", body: "This is pocket change for people who mean business." },
-  { header: "If you want it to matter, it should cost something.", body: "Add funds... not just for access, but for meaning."},
-  { header: "Just enough. Just right.", body: "Top up once. Let every post carry weight."},
-  { header: "You want to post? Fuel it.", body: "No noise here... just the ones who show they mean it."},
+  { header: "Top-up now. Post anytime.", body: ""},  
 ]; 
 
 const approval_pitches = [
-  { header: "Approve once. Save more.", body: "Set it and forget it... because time is the one thing you don't get back." },
-  // { header: "Approve future posts.", body: "You never know when the next important thing you'll say will come. Be ready."},
-  { header: "Smarter posting starts now.", body: "Approve once. Create without friction."},
-  { header: "Cut the delay. Post faster.", body: "One approval. Many strikes. Keep the fire going."},
+  { header: "Approve more. Skip more. Save more.", body: "" },
+  { header: "Post faster. Pay lesser.", body: ""},
 ]; 
 
 function randomPitch(arr) {
@@ -60,7 +63,8 @@ function randomPitch(arr) {
 }
 
 let post_payment_pitch = randomPitch(post_payment_pitches);
-let post_input_pitch = randomPitch(post_input_pitches);
+let thread_input_pitch = randomPitch(thread_input_pitches);
+let reply_input_pitch = randomPitch(reply_input_pitches);
 let sign_in_pitch = randomPitch(sign_in_pitches);
 let top_up_pitch = randomPitch(top_up_pitches);
 let approval_pitch = randomPitch(approval_pitches);
@@ -344,7 +348,7 @@ function focusPostInput() {
     input.click();
     setTimeout(() => {
       submit.scrollIntoView({ behavior: 'smooth', block: 'end' });
-    }, 300); // Wait for keyboard to show (tweak for device)
+    }, 200); // Wait for keyboard to show (tweak for device)
   }, 400); // Wait for slide-in animation to end
 }
 
@@ -931,7 +935,8 @@ class App {
             <button class="action-btn" @click=${(e) => this.closeReplies(e)}>Close</button>
             <button class="action-btn" @click=${() => {
               is_composing_post = true; 
-              post_input_pitch = randomPitch(post_input_pitches);
+              thread_input_pitch = randomPitch(thread_input_pitches);
+              reply_input_pitch = randomPitch(reply_input_pitches);
               this.renderPosts();
               focusPostInput();
             }}>Add Reply</button>
@@ -947,17 +952,11 @@ class App {
         <p>
           <strong>${
             // post_input_pitch.header
-            is_comments_open? 'Add a Reply' : 'Create a New Thread.'
+            is_comments_open? 'Add a Reply' : 'Create a New Thread'
           }</strong><br>
-          <small><small>${
-            // post_input_pitch.body
-            is_comments_open? 'Got a question or a better opinion?' : 'Say something worth reading.'
-          }</small></small>
+          <small><small>${is_comments_open? reply_input_pitch.body : thread_input_pitch.body}</small></small>
           <br><br>
-          <input id="post_input" type="text" placeholder="${
-            // post_input_pitch.placeholder
-            'Write here to start'
-          }" @input=${(e) => this.updateCharCount(e)} 
+          <input id="post_input" type="text" ?disabled=${is_posting} placeholder="${is_comments_open? reply_input_pitch.placeholder : thread_input_pitch.placeholder}" @input=${(e) => this.updateCharCount(e)} 
               .value=${post_content || ''}/>
           <span class="char-count">${char_count}</span>
         </p>
@@ -981,14 +980,8 @@ class App {
       : null}
       <div class="drawer wallet ${this.isSelectingWallet ? 'open' : ''}">
         <p>
-          <strong>${
-            // sign_in_pitch.header
-            'Real posts come from real people.'
-          }</strong><br>
-          <small><small>${
-            // sign_in_pitch.body
-            "Let's make yours real too."
-          }</small></small>
+          <strong>${sign_in_pitch.header}</strong><br>
+          <small><small>${sign_in_pitch.body}</small></small>
         </p>
         <div class="action-bar">
           <button class="action-btn" @click=${(e) => this.closeLogin(e)}>Close</button>
@@ -1061,10 +1054,7 @@ class App {
     : null}
     <div class="drawer balance ${is_waiting_balance ? 'open' : ''}">
       <p>
-        <strong>${
-          // top_up_pitch.header
-          "Just a top-up. Then you're in."
-        }</strong>
+        <strong>${top_up_pitch.header}</strong>
         <!-- <br><small><small>${top_up_pitch.body}</small></small> -->
         <br><br><small>${token_total.msg}</small>
         <br><small>Your balance: ${is_checking_balance ? html`<span class="spinner"></span>` : normalizeNumber(token_balance / token_power)} ${token_symbol}</small>
@@ -1162,7 +1152,7 @@ class App {
             this.renderPosts();
           }}>
           <label for="approval2">
-            <small><strong>10 posts</strong></small><br>
+            <small><strong>This post + 9 future posts</strong></small><br>
             <small><small>Skip approval steps and save fees for your next 9 posts. <strong>Recommended.</strong></small></small>
           </label>
         </div>
@@ -1173,7 +1163,7 @@ class App {
             this.renderPosts();
           }}>
           <label for="approval3">
-            <small><strong>100 posts</strong></small><br>
+            <small><strong>This post + 99 future posts</strong></small><br>
             <small><small>Enjoy a smoother, faster experience for the long run. <strong>Best for active posters.</strong></small></small>
           </label>
         </div>
@@ -1202,7 +1192,8 @@ class App {
       <!--<button class="action-btn" disabled>Refresh</button>-->
       <button class="action-btn" @click=${() => { 
         is_composing_post = true;
-        post_input_pitch = randomPitch(post_input_pitches);
+        thread_input_pitch = randomPitch(thread_input_pitches);
+        reply_input_pitch = randomPitch(reply_input_pitches);
         this.renderPosts();
         focusPostInput();
       }}>New Thread</button>
