@@ -16,7 +16,23 @@ let caller_account_copied = false;
 let caller_account_copy_failed = false;
 
 /*
-  todo: snap scroll
+todo: disable pull to refresh
+todo: persist login session
+todo: sorter (new/hot)
+todo: delete button, confirm, deleted view
+todo: replace input with textarea
+todo: whitespace cleaner
+todo: long text cut-off with "..."
+todo: optimistic rendering
+todo: cache threads/replies 
+todo: wallet pane to withdraw/revoke/logout
+todo: tipping button, tipping form, tipped view
+todo: report button, report form, reported view
+todo: appeal button, appeal form, appealed view
+todo: sunglasses (dark mode)
+todo: ambience music
+todo: buttons sound
+todo: snap scroll
 */
 
 const post_payment_pitches = [
@@ -24,8 +40,8 @@ const post_payment_pitches = [
   html`Bots post for free. We don't.`,
   html`Reach everyone. No followers needed.`,
   html`Claim your space.`,
-  html`It's a noise filter.`,
-  html`This is the next internet. Leave your mark.`,
+  html`Cut the noise. Keep the signal.`,
+  html`This is the New Internet. Leave your mark.`,
 ];
 
 const thread_input_pitches = [
@@ -36,18 +52,20 @@ const thread_input_pitches = [
 
 const reply_input_pitches = [
   { header: "", body: "Resurrect the thread.", placeholder: "What do you have to say?" },
-  { header: "", body: "Can you take it further?", placeholder: "Amplify the signal..." },
-  { header: "", body: "Let's keep it going.", placeholder: "Make the thread longer..." },
+  { header: "", body: "Push the thread further.", placeholder: "Amplify the signal..." },
+  { header: "", body: "Keep the chain alive.", placeholder: "Make the thread longer..." },
 ];
 
 const sign_in_pitches = [
-  { header: "You're the producer, not the product.", body: "Let's prove that." },
-  { header: "AI is flooding the Internet.", body: "Good thing you found the higher ground. Join us."},
-  { header: "Algorithms ruined the Internet.", body: "Good thing we don't have algorithms here. Join us."},
-  { header: "Welcome to the Real Internet.", body: "No noise. Only signals."},
-  { header: "First-time user?", body: "Don't worry, everyone here can reach everyone."},
-  { header: "Not popular?", body: "Popularity is not the Truth; we only want to read what you wrote."},
-]; 
+  { header: "AI is flooding the Internet.", body: "You found the high ground. You found us." },
+  { header: "Algorithms ruined the Internet.", body: "Here, your words reach everyone, not the void." },
+  { header: "Welcome to the New Internet.", body: "No vanity. No followers. Just posts." },
+  { header: "Dead Internet Theory is no longer a theory.", body: "Let's keep this new one alive." },
+  { header: "Every word has an author.", body: "You wrote it. Now own it." },
+  { header: "We've been expecting you.", body: "Join us to reach the rest." },
+  { header: "You're posting on the New Internet.", body: "Be one of the pioneers." },
+  { header: "Built different?", body: "So is this place. Let's keep it going." },
+];
 
 const top_up_pitches = [
   { header: "Top-up now. Post anytime.", body: ""},  
@@ -56,6 +74,7 @@ const top_up_pitches = [
 const approval_pitches = [
   { header: "Approve more. Skip more. Save more.", body: "" },
   { header: "Post faster. Pay lesser.", body: ""},
+  { header: "Bigger approval. Fewer interruptions.", body: ""},
 ]; 
 
 function randomPitch(arr) {
