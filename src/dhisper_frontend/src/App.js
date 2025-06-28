@@ -16,8 +16,8 @@ let caller_account_copied = false;
 let caller_account_copy_failed = false;
 
 /*
-todo: persist login session
 todo: sorter (new/hot)
+todo: remove delete fees, delete should be free
 todo: delete button, confirm, deleted view
 todo: combine post+pay popup
 todo: replace input with textarea
@@ -25,7 +25,7 @@ todo: whitespace cleaner
 todo: long text cut-off with "..."
 todo: optimistic rendering
 todo: cache threads/replies 
-todo: wallet pane to withdraw/revoke/logout
+todo: wallet pane to withdraw/(logout+revoke)
 todo: tipping button, tipping form, tipped view
 todo: report button, report form, reported view
 todo: appeal button, appeal form, appealed view
@@ -394,6 +394,7 @@ class App {
     this.commentInput = "";
 
     this.setupScroll();
+    this.setupIdentity();
     this.renderPosts();
     this.getPosts();
   }
@@ -788,6 +789,24 @@ class App {
     this.renderPosts();
   }
 
+  async setupIdentity() {
+    this.isConnectingWallet = true;
+    if (internet_identity == null) try {
+      internet_identity = await AuthClient.create();
+    } catch (err) {
+      this.isConnectingWallet = false;
+      return console.error("BG Error while Creating Auth Client", err);
+    };
+    try {
+      if (await internet_identity.isAuthenticated()) {
+        this.handleAuthenticated(null);
+      } else console.log("No delegation");
+    } catch (err) {
+      console.error("BG Error while Checking Identity Delegation", err);
+    };
+    this.isConnectingWallet = false;
+  }
+
   async loginInternetIdentity(e) {
     e.preventDefault();
     this.isConnectingWallet = true;
@@ -799,12 +818,20 @@ class App {
       this.catchPopup("Error while Creating Auth Client", err);
       return this.renderPosts();
     };
-    internet_identity.login({
-      // 7 days in nanoseconds
-      maxTimeToLive: BigInt(7 * 24 * 60 * 60 * 1000 * 1000 * 1000),
-      identityProvider,
-      onSuccess: async () => await this.handleAuthenticated(e),
-    });
+    try {
+      if (await internet_identity.isAuthenticated()) {
+        this.handleAuthenticated(e);
+      } else internet_identity.login({
+        // 30 days in nanoseconds
+        maxTimeToLive: BigInt(30 * 24 * 60 * 60 * 1000 * 1000 * 1000),
+        identityProvider,
+        onSuccess: async () => await this.handleAuthenticated(e),
+      });
+    } catch (err) {
+      this.isConnectingWallet = false;
+      this.catchPopup("Error while Checking Identity Delegation", err);
+      this.renderPosts();
+    };
   }
 
   async handleAuthenticated(e) {
@@ -814,17 +841,18 @@ class App {
       // if (network !== 'ic') await caller_agent.fetchRootKey();
       caller_principal = identity.getPrincipal();
       caller_account = AccountIdentifier.fromPrincipal({ principal: caller_principal }).toHex();
-      // console.log({ identity, caller: caller_principal.toText(), caller_account });
+      console.log({ caller: shortPrincipal(caller_principal), caller_account });
       await prepareTokens();
-      if (is_posting) {
+      if (e != null && is_posting) {
         this.createNewPost(e);
       };
     } catch (err) {
-      this.catchPopup("Error after Authentication", err);
+      const err_title = "Error after Authentication";
+      if (e == null) this.catchPopup(err_title, err); else console.error(err_title, err);
     }
     this.isSelectingWallet = false;
     this.isConnectingWallet = false;
-    this.renderPosts();
+    if (e != null) this.renderPosts();
   }
 
   async approveToken(e) {
@@ -864,7 +892,6 @@ class App {
     }
     this.renderPosts();
   }
-  // todo: add logo
 
   closeCompose(e) {
     e.preventDefault();
