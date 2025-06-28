@@ -16,10 +16,10 @@ let caller_account_copied = false;
 let caller_account_copy_failed = false;
 
 /*
-todo: disable pull to refresh
 todo: persist login session
 todo: sorter (new/hot)
 todo: delete button, confirm, deleted view
+todo: combine post+pay popup
 todo: replace input with textarea
 todo: whitespace cleaner
 todo: long text cut-off with "..."
@@ -29,6 +29,8 @@ todo: wallet pane to withdraw/revoke/logout
 todo: tipping button, tipping form, tipped view
 todo: report button, report form, reported view
 todo: appeal button, appeal form, appealed view
+todo: load comments on slide
+todo: fix normal button's gloss
 todo: sunglasses (dark mode)
 todo: ambience music
 todo: buttons sound
@@ -445,7 +447,7 @@ class App {
 
   setupScroll() {
     // Mouse wheel (desktop)
-    window.addEventListener('wheel', async (e) => {
+    this.root.addEventListener('wheel', async (e) => {
       if (this.isSliding) return;
       if (is_composing_post) return;
       if (is_comments_open) return;
@@ -458,27 +460,32 @@ class App {
     });
   
     // Touch (mobile)
+    let touchStartX = 0;
+    let touchEndX = 0;
     let touchStartY = 0;
     let touchEndY = 0;
   
-    window.addEventListener('touchstart', (e) => {
+    this.root.addEventListener('touchstart', (e) => {
+      touchStartX = e.changedTouches[0].clientX;
       touchStartY = e.changedTouches[0].clientY;
     });
   
-    window.addEventListener('touchend', (e) => {
+    this.root.addEventListener('touchend', (e) => {
       if (this.isSliding) return;
       if (is_composing_post) return;
       if (is_comments_open) return;
-  
+      touchEndX = e.changedTouches[0].clientX;
       touchEndY = e.changedTouches[0].clientY;
+      const deltaX = touchStartX - touchEndX;
       const deltaY = touchStartY - touchEndY;
-  
-      if (deltaY > 30 && this.currentIndex < this.posts.length - 1) {
-        // Swipe up
-        this.startSlide(this.currentIndex + 1, 'up');
-      } else if (deltaY < -30 && this.currentIndex > 0) {
-        // Swipe down
-        this.startSlide(this.currentIndex - 1, 'down');
+      if (Math.abs(deltaX) > Math.abs(deltaY)) {
+        // horizontal swipe
+      } else { // vertical
+        if (deltaY > 40 && this.currentIndex < this.posts.length - 1) {
+          this.startSlide(this.currentIndex + 1, 'up');
+        } else if (deltaY < -40 && this.currentIndex > 0) {
+          this.startSlide(this.currentIndex - 1, 'down');
+        }
       }
     });
   }
@@ -906,7 +913,6 @@ class App {
     this.renderPosts(); 
   }
 
-  // todo: optimistic rendering
   renderPosts() {
     if (this.isSliding) return;
     let current_post;

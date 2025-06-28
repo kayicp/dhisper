@@ -36,6 +36,7 @@ html, body {
   margin: 0;
   padding: 0;
   overflow: hidden;
+  overscroll-behavior: none;
   height: auto;
   min-height: 100vh;
   font-family: sans-serif;
@@ -47,6 +48,7 @@ html, body {
   min-height: 100vh;
   width: 100%;
   overflow: hidden;
+  overscroll-behavior: contain;
 }
 
 .post-layer {
