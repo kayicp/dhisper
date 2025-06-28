@@ -54,17 +54,7 @@ dfx deploy dhisper_backend --no-wallet --argument "(
         fee_collectors = vec {
           principal \"$DEFAULT_PRINCIPAL\";
         };
-        delete_fee_rates = vec {
-          record {
-            assets = vec {
-              record {
-                canister_id = principal \"$TOKEN_ID\";
-                minimum_amount = opt (100_000 : nat);
-              };
-            };
-            standard = \"ICRC-2\";
-          };
-        };
+        delete_fee_rates = vec {};
         default_take_value = opt (100 : nat);
         max_threads_size = opt (300 : nat);
         max_replies_size = opt (300 : nat);

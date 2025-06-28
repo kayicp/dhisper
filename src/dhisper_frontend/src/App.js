@@ -16,16 +16,15 @@ let caller_account_copied = false;
 let caller_account_copy_failed = false;
 
 /*
-todo: sorter (new/hot)
-todo: remove delete fees, delete should be free
 todo: delete button, confirm, deleted view
+todo: sorter (new/hot)
+todo: wallet pane to withdraw/(logout+revoke)
 todo: combine post+pay popup
 todo: replace input with textarea
 todo: whitespace cleaner
 todo: long text cut-off with "..."
 todo: optimistic rendering
 todo: cache threads/replies 
-todo: wallet pane to withdraw/(logout+revoke)
 todo: tipping button, tipping form, tipped view
 todo: report button, report form, reported view
 todo: appeal button, appeal form, appealed view
