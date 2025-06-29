@@ -456,9 +456,9 @@ module {
   };
 
   // todo: revert to use digest
-  public func hashMeta(meta : [(Text, Type)]) : Blob {
+  public func hashMeta(meta_iter : { next() : ?(Text, Type) }) : Blob {
     var hashes = RBTree.empty<Blob, Blob>();
-    for ((k, v) in meta.vals()) {
+    for ((k, v) in meta_iter) {
       let keyHash = Hasher.sha256([Text.encodeUtf8(k).vals()].vals());
       let valueHash = hash(v);
       hashes := RBTree.insert(hashes, Blob.compare, keyHash, valueHash);

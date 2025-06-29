@@ -116,7 +116,7 @@ module {
 		phash : ?Blob; // hash of previous version, 1st version is null
 	};
 	public type Post = {
-		thread : ?Nat; // todo: remove this
+		thread : ?Nat;
 		versions : RBTree.RBTree<Nat, Must>;
 		content_versions : RBTree.RBTree<Nat, Text>;
 		files_versions : RBTree.RBTree<Nat, RBTree.RBTree<Text, ()>>;
@@ -279,6 +279,19 @@ module {
 			p with owners_versions = RBTree.insert(p.owners_versions, Nat.compare, RBTree.size(p.versions), owners)
 		};
 	};
+	// func newMetadata(p : Post, meta : Value.Metadata, hashed : Blob -> ()) : Post {
+	//   var hashes = RBTree.empty<Blob, Blob>();
+	//   func register(k : Text, v : Value.Type) {
+	//     let keyHash = Hasher.sha256([Text.encodeUtf8(k).vals()].vals());
+	//     let valueHash = Value.hash(v);
+	//     hashes := RBTree.insert(hashes, Blob.compare, keyHash, valueHash);
+	//   };
+	//   register("metadata", #Map(RBTree.array(meta)));
+	//   hashed(Hasher.sha256blobMap(RBTree.entries(hashes)));
+	//   {
+	//     p with metadata_versions = RBTree.insert(p.metadata_versions, Nat.compare, RBTree.size(p.versions), meta)
+	//   };
+	// };
 
 	public func deletePost(
 		_p : Post,
@@ -294,10 +307,6 @@ module {
 			hashes := RBTree.insert(hashes, Blob.compare, keyHash, valueHash);
 		};
 		var p = _p;
-		switch (p.thread) {
-			case (?defined) register("thread", #Nat defined);
-			case _ ();
-		};
 		let must : Must = { authorization; timestamp; phash = ?p.hash };
 		p := newMust(p, must, func(b) = register("versions", #Blob b));
 		p := newContent(p, "", func(b) = register("content_versions", #Blob b));

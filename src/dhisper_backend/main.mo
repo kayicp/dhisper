@@ -292,7 +292,7 @@ shared (install) actor class Canister(
         };
         (#ICRC_2 { auth with owner = caller; xfer = transfer_from_id }, #ICRC_1 user);
       };
-      case _ return Error.text("ICRC-1 & ICRC-7 authorizations are not implemented yet");
+      case _ return Error.text("Only ICRC-2 authorization is allowed");
     };
 
     let new_post_id = post_id;
@@ -328,78 +328,82 @@ shared (install) actor class Canister(
 
   // public shared ({ caller }) func kay4_modify(arg : Kay4.ModifyPostArg) : async Result.Type<(), Kay4.ModifyPostError> = async Error.text("'kay4_modify' is not implemented yet");
 
-  // public shared ({ caller }) func kay4_delete(arg : Kay4.DeletePostArg) : async Result.Type<(), Kay4.DeletePostError> {
-  //   var is_locker = false;
-  //   try {
-  //     if (not Kay1.isAvailable(metadata)) return Error.text("Unavailable");
-  //     let the_post = switch (RBTree.get(posts, Nat.compare, arg.id)) {
-  //       case (?found) found;
-  //       case _ return #Err(#UnknownPost);
-  //     };
-  //     let post_owners = Kay4.getOwners(the_post);
-  //     let authorization = switch (arg.authorization) {
-  //       case (#None auth) (#None { auth with owner = caller });
-  //       // todo: rethink icrc1 delete
-  //       // case (#ICRC_1 auth) {
-  //       //   let user = { owner = caller; subaccount = auth.subaccount };
-  //       //   if (not Account.validate(user)) return Error.text("Invalid caller account");
+  public shared ({ caller }) func kay4_delete(arg : Kay4.DeletePostArg) : async Result.Type<(), Kay4.DeletePostError> = async try {
+    if (not Kay1.isAvailable(metadata)) return Error.text("Unavailable");
+    let the_post = switch (RBTree.get(posts, Nat.compare, arg.id)) {
+      case (?found) found;
+      case _ return #Err(#UnknownPost);
+    };
+    let post_owners = Kay4.getOwners(the_post);
+    let authorization = switch (arg.authorization) {
+      case (#None auth) {
+        let user = { owner = caller; subaccount = auth.subaccount };
+        if (not RBTree.has(post_owners, Kay2.compareIdentity, #ICRC_1 user)) return Error.text("Caller is not the owner of the post");
+        let post_content = switch (Kay4.getContent(the_post)) {
+          case (?found) found;
+          case _ "";
+        };
+        if (Text.size(post_content) == 0) return Error.text("This post has been deleted");
+        (#None { auth with owner = caller });
+      };
+      /*
+      // todo: rethink icrc1 delete
+      // case (#ICRC_1 auth) {
+      //   let user = { owner = caller; subaccount = auth.subaccount };
+      //   if (not Account.validate(user)) return Error.text("Invalid caller account");
 
-  //       //   let token_minimums = Value.getPrincipalMap(metadata, Kay2.TOKEN_MINIMUMS, RBTree.empty());
-  //       //   let minimum_balance = switch (RBTree.get(token_minimums, Principal.compare, auth.canister_id)) {
-  //       //     case (?#Nat minimum) minimum;
-  //       //     case _ return #Err(#Unauthorized(#ICRC_1(#BadCanister { expected_canister_ids = RBTree.arrayKey(token_minimums) })));
-  //       //   };
-  //       //   let token = ICRC_1_Types.genActor(auth.canister_id);
-  //       //   lock(?{ arg with caller });
-  //       //   is_locker := true;
-  //       //   let current_balance = await token.icrc1_balance_of(user);
-  //       //   if (current_balance < minimum_balance) {
-  //       //     lock(null);
-  //       //     return #Err(#Unauthorized(#ICRC_1(#BalanceTooSmall { current_balance; minimum_balance })));
-  //       //   };
-  //       //   #ICRC_1 { auth with owner = caller; minimum_balance };
-  //       // };
-  //       case (#ICRC_2 auth) {
-  //         let user = { owner = caller; subaccount = auth.subaccount };
-  //         if (not RBTree.has(post_owners, Kay2.compareIdentity, #ICRC_1 user)) return Error.text("Caller is not the owner of the post");
+      //   let token_minimums = Value.getPrincipalMap(metadata, Kay2.TOKEN_MINIMUMS, RBTree.empty());
+      //   let minimum_balance = switch (RBTree.get(token_minimums, Principal.compare, auth.canister_id)) {
+      //     case (?#Nat minimum) minimum;
+      //     case _ return #Err(#Unauthorized(#ICRC_1(#BadCanister { expected_canister_ids = RBTree.arrayKey(token_minimums) })));
+      //   };
+      //   let token = ICRC_1_Types.genActor(auth.canister_id);
+      //   lock(?{ arg with caller });
+      //   is_locker := true;
+      //   let current_balance = await token.icrc1_balance_of(user);
+      //   if (current_balance < minimum_balance) {
+      //     lock(null);
+      //     return #Err(#Unauthorized(#ICRC_1(#BalanceTooSmall { current_balance; minimum_balance })));
+      //   };
+      //   #ICRC_1 { auth with owner = caller; minimum_balance };
+      // };
+      // case (#ICRC_2 auth) {
+      //   let user = { owner = caller; subaccount = auth.subaccount };
+      //   if (not RBTree.has(post_owners, Kay2.compareIdentity, #ICRC_1 user)) return Error.text("Caller is not the owner of the post");
 
-  //         let expected_fee = switch (getFee({ auth with content_size = 0; content_max = 0; fee_key = Kay4.DELETE_FEE_RATES })) {
-  //           case (#Ok ok) ok;
-  //           case (#Err err) return #Err err;
-  //         };
-  //         let token = ICRC_1_Types.genActor(auth.canister_id);
-  //         let transfer_from_args = {
-  //           amount = expected_fee;
-  //           from = user;
-  //           to = { owner = self(); subaccount = null };
-  //           spender_subaccount = null;
-  //           created_at_time = null;
-  //           memo = null;
-  //           fee = null;
-  //         };
-  //         lock(?{ arg with caller });
-  //         is_locker := true;
-  //         let transfer_from_id = switch (await token.icrc2_transfer_from(transfer_from_args)) {
-  //           case (#Err err) {
-  //             lock(null);
-  //             return #Err(#Unauthorized(#ICRC_2(#TransferFromFailed err)));
-  //           };
-  //           case (#Ok ok) ok;
-  //         };
-  //         #ICRC_2 { auth with owner = caller; xfer = transfer_from_id };
-  //       };
-  //       case _ return Error.text("ICRC-7 authorizations not implemented yet");
-  //     };
-  //     lock(null);
-  //     let deleted = Kay4.deletePost(the_post, { authorization; timestamp = Time64.nanos() });
-  //     posts := RBTree.insert(posts, Nat.compare, arg.id, deleted);
-  //     trim();
-  //     #Ok;
-  //   } catch e {
-  //     if (is_locker) lock(null);
-  //     Error.error(e);
-  //   };
-  // };
+      //   let expected_fee = switch (getFee({ auth with content_size = 0; content_max = 0; fee_key = Kay4.DELETE_FEE_RATES })) {
+      //     case (#Ok ok) ok;
+      //     case (#Err err) return #Err err;
+      //   };
+      //   let token = ICRC_1_Types.genActor(auth.canister_id);
+      //   let transfer_from_args = {
+      //     amount = expected_fee;
+      //     from = user;
+      //     to = { owner = self(); subaccount = null };
+      //     spender_subaccount = null;
+      //     created_at_time = null;
+      //     memo = null;
+      //     fee = null;
+      //   };
+      //   lock(?{ arg with caller });
+      //   is_locker := true;
+      //   let transfer_from_id = switch (await token.icrc2_transfer_from(transfer_from_args)) {
+      //     case (#Err err) {
+      //       lock(null);
+      //       return #Err(#Unauthorized(#ICRC_2(#TransferFromFailed err)));
+      //     };
+      //     case (#Ok ok) ok;
+      //   };
+      //   #ICRC_2 { auth with owner = caller; xfer = transfer_from_id };
+      // };
+      */
+      case _ return Error.text("Only None authorization is allowed");
+    };
+    let deleted = Kay4.deletePost(the_post, { authorization; timestamp = Time64.nanos() });
+    posts := RBTree.insert(posts, Nat.compare, arg.id, deleted);
+    // trim();
+    #Ok;
+  } catch e Error.error(e);
 
   public shared query func kay4_threads(prev : ?Nat, take : ?Nat) : async [Nat] {
     let _take = Pager.cleanTake(take, Value.metaNat(metadata, Kay4.MAX_TAKE), Value.metaNat(metadata, Kay4.DEFAULT_TAKE), RBTree.size(threads));
