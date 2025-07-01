@@ -30,6 +30,7 @@ todo: report button, report form, reported view
 todo: appeal button, appeal form, appealed view
 todo: load comments on slide
 todo: fix normal button's gloss
+todo: fix radio button disabled css
 todo: sunglasses (dark mode)
 todo: ambience music
 todo: buttons sound
@@ -94,10 +95,10 @@ let is_seeing_cost = false;
 let is_paying = false;
 
 let create_fee_rates = null;
-let delete_fee_rates = null;
 let selected_create_fee_token_standard = null;
 let selected_create_fee_token_canister = null;
 let selected_create_fee_rate = null;
+let delete_fee_rates = null;
 let selected_delete_fee_standard = null;
 let selected_delete_token_canister = null;
 let selected_delete_fee_rate = null;
@@ -971,14 +972,20 @@ class App {
     ? html`
         <div class="comment-panel slide-in">
           <div class="comment-list">
-            <div class="comment">
-              <div class="meta">#${this.activeThread.id} • ${shortPrincipal(this.activeThread.owner)}${this.activeThread.timestamp ? ' • ' + timeAgo(this.activeThread.timestamp) : ''}</div>
-              <div class="content">${this.activeThread.content}</div>
+            <div class="comment-grid">
+              <div class="comment">
+                <div class="meta">#${this.activeThread.id} • ${shortPrincipal(this.activeThread.owner)}${this.activeThread.timestamp ? ' • ' + timeAgo(this.activeThread.timestamp) : ''}</div>
+                <div class="content">${this.activeThread.content}</div>
+              </div>
+              <button class="action-btn">⋮</button>
             </div>
             ${this.threadComments.map(comment => html`
-              <div class="comment">
-                <div class="meta">#${comment.id} • ${shortPrincipal(comment.owner)}${comment.timestamp ? ` • ${timeAgo(comment.timestamp)}` : ''}</div>
-                <div class="content">${comment.content}</div>
+              <div class="comment-grid">
+                <div class="comment">
+                  <div class="meta">#${comment.id} • ${shortPrincipal(comment.owner)}${comment.timestamp ? ` • ${timeAgo(comment.timestamp)}` : ''}</div>
+                  <div class="content">${comment.content}</div>
+                </div>
+                <button class="action-btn">⋮</button>
               </div>
             `)}
           </div>
@@ -998,7 +1005,7 @@ class App {
       // todo: reduce to 1rem on default text
     const create_new_post_form = html`
       ${is_composing_post
-      ? html`<div class="compose-backdrop" @click=${(e) => this.closeCompose(e)}></div>` : null}
+      ? html`<div class="backdraw compose" @click=${(e) => this.closeCompose(e)}></div>` : null}
       <div class="drawer compose ${is_composing_post ? 'open' : ''}">
         <p>
           <strong>${
@@ -1027,7 +1034,7 @@ class App {
     `;
     const wallet_selectors = html`
       ${this.isSelectingWallet
-      ? html`<div class="wallet-backdrop" @click=${(e) => this.closeLogin(e)}></div>`
+      ? html`<div class="backdraw wallet" @click=${(e) => this.closeLogin(e)}></div>`
       : null}
       <div class="drawer wallet ${this.isSelectingWallet ? 'open' : ''}">
         <p>
@@ -1045,7 +1052,7 @@ class App {
 
   //   const token_selectors = html`
   //   ${this.isSelectingToken
-  //   ? html`<div class="token-backdrop" @click=${() => { 
+  //   ? html`<div class="backdraw token" @click=${() => { 
   //       this.isSelectingToken = false; 
   //       this.renderPosts(); 
   //     }}></div>`
@@ -1062,7 +1069,7 @@ class App {
   // `;
       const cost_and_reasons = html`
       ${is_seeing_cost
-      ? html`<div class="cost-backdrop" @click=${(e) => this.closePayment(e)}></div>`
+      ? html`<div class="backdraw cost" @click=${(e) => this.closePayment(e)}></div>`
       : null}
       <div class="drawer cost ${is_seeing_cost ? 'open' : ''}">
         <p>
@@ -1082,7 +1089,7 @@ class App {
     `;
     const token_balance_waiter_details = html`
     ${is_viewing_cost_details
-    ? html`<div class="cost-breakdown-backdrop" @click=${(e) => this.closeCostDetails(e)}></div>`
+    ? html`<div class="backdraw cost-breakdown" @click=${(e) => this.closeCostDetails(e)}></div>`
     : null}
     <div class="drawer cost-breakdown ${is_viewing_cost_details ? 'open' : ''}">
       <p>
@@ -1101,7 +1108,7 @@ class App {
     </div>
   `;
     const token_balance_waiter = html`${is_waiting_balance
-    ? html`<div class="balance-backdrop" @click=${(e) => this.closeBalanceWaiter(e)}></div>`
+    ? html`<div class="backdraw balance" @click=${(e) => this.closeBalanceWaiter(e)}></div>`
     : null}
     <div class="drawer balance ${is_waiting_balance ? 'open' : ''}">
       <p>
@@ -1176,7 +1183,7 @@ class App {
 `;
   const token_approve_form = html`
       ${is_waiting_approval
-      ? html`<div class="approve-backdrop" @click=${(e) => this.closeApprovalWaiter(e)}></div>`
+      ? html`<div class="backdraw approve" @click=${(e) => this.closeApprovalWaiter(e)}></div>`
       : null}
       <div class="drawer approve ${is_waiting_approval ? 'open' : ''}">
         <p>
@@ -1230,7 +1237,7 @@ class App {
       </div>
     `;
   const popup = popup_html ? html`
-    <div class="popup-backdrop"></div>
+    <div class="backdraw popup"></div>
     <div class="popup in">${popup_html}</div>
   ` : null;
 

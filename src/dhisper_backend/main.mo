@@ -16,9 +16,7 @@ import Pager "../util/motoko/Pager";
 import Queue "../util/motoko/StableCollections/Queue";
 
 // todo: background process
-// todo: for dhisper, replace the post completely when deleting
 // todo: rename modifications
-// todo: redo Post type? so it will be more future-proof.
 
 shared (install) actor class Canister(
   deploy : {
@@ -225,7 +223,6 @@ shared (install) actor class Canister(
     #Ok expected_fee;
   };
 
-  // todo: error when replies reached max replies per thread
   public shared ({ caller }) func kay4_create(arg : Kay4.CreatePostArg) : async Result.Type<Nat, Kay4.CreatePostError> = async try {
     if (not Kay1.isAvailable(metadata)) return Error.text("Unavailable");
     if (arg.owners.size() > 0) return Error.text("Owners must be empty");
@@ -235,7 +232,7 @@ shared (install) actor class Canister(
       case (?op_id) switch (RBTree.get(threads, Nat.compare, op_id)) {
         case (?thread_replies) {
           let max_replies = Value.getNat(metadata, Kay4.MAX_REPLIES, 0);
-          if (max_replies > 0 and RBTree.size(thread_replies) >= max_replies) return Error.text("Cannot reply anymore; thread has entered read-only mode");
+          if (max_replies > 0 and RBTree.size(thread_replies) >= max_replies) return Error.text("Thread reached max replies");
         };
         case _ return #Err(#UnknownThread);
       };

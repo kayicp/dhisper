@@ -141,7 +141,7 @@ p {
 
 .drawer {
   position: fixed;
-  bottom: -100%;
+  bottom: -150%;
   left: 0;
   width: 100%;
   border-top-right-radius: 10px;
@@ -164,56 +164,32 @@ p {
   z-index: 80;
 }
 
-.drawer.compose.open{
-  bottom: 0;
-}
-
 .drawer.wallet {
   z-index: 90;
-}
-
-.drawer.wallet.open{
-  bottom: 0;
 }
 
 .drawer.cost {
   z-index: 100;
 }
 
-.drawer.cost.open{
-  bottom: 0;
-}
-
 .drawer.cost-breakdown {
   z-index: 110;
-}
-
-.drawer.cost-breakdown.open{
-  bottom: 0;
 }
 
 .drawer.token {
   z-index: 120;
 }
 
-.drawer.token.open{
-  bottom: 0;
-}
-
 .drawer.balance {
   z-index: 130;
-}
-
-.drawer.balance.open{
-  bottom: 0;
 }
 
 .drawer.approve {
   z-index: 140;
 }
 
-.drawer.approve.open{
-  bottom: 0;
+.drawer.open {
+  bottom: 0
 }
 
 .popup {
@@ -304,76 +280,44 @@ input[type=text]:focus {
   margin-top: -10px;
 }
 
-.compose-backdrop {
+.backdraw{
   position: fixed;
   inset: 0;
   background: rgba(0, 0, 0, 0.25);
   backdrop-filter: blur(2px);
+  animation: fadeIn 0.3s ease forwards;
+}
+
+.backdraw.compose {
   z-index: 75;
-  animation: fadeIn 0.3s ease forwards;
 }
 
-.wallet-backdrop {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.25);
-  backdrop-filter: blur(2px);
+.backdraw.wallet {
   z-index: 85;
-  animation: fadeIn 0.3s ease forwards;
 }
 
-.cost-backdrop {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.25);
-  backdrop-filter: blur(2px);
+.backdraw.cost {
   z-index: 95;
-  animation: fadeIn 0.3s ease forwards;
 }
 
-.cost-breakdown-backdrop {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.25);
-  backdrop-filter: blur(2px);
+.backdraw.cost-breakdown {
   z-index: 105;
-  animation: fadeIn 0.3s ease forwards;
 }
 
-.token-backdrop {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.25);
-  backdrop-filter: blur(2px);
+.backdraw.token {
   z-index: 115;
-  animation: fadeIn 0.3s ease forwards;
 }
 
-.balance-backdrop {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.25);
-  backdrop-filter: blur(2px);
+.backdraw.balance {
   z-index: 125;
-  animation: fadeIn 0.3s ease forwards;
 }
 
-.approve-backdrop {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.25);
-  backdrop-filter: blur(2px);
+.backdraw.approve {
   z-index: 135;
-  animation: fadeIn 0.3s ease forwards;
 }
 
-.popup-backdrop {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.25);
-  backdrop-filter: blur(2px);
+.backdraw.popup {
   z-index: 995;
-  animation: fadeIn 0.3s ease forwards;
 }
 
 @keyframes fadeIn {
@@ -401,7 +345,8 @@ input[type=text]:focus {
   position: relative;
   width: 100%;
   height: 100%;
-  padding: 2rem;
+  padding-top: 50px;
+  padding-bottom: 50px;
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
@@ -454,26 +399,27 @@ input[type=text]:focus {
   padding-bottom: 50px;
 }
 
-.comment {
-  background: transparent;
-  padding: 10px;
+.comment-grid {
   margin: 10px;
-  box-shadow: 0 0 10px #00000080;
-  -webkit-backdrop-filter: blur(2px);
-  backdrop-filter: blur(2px);
+  display: grid;
+  grid-template-columns: 1fr 25px;
+  box-shadow: 0 0 20px #fffa;
+  border: 1.5px solid rgba(255,255,255,.7);
+  
+}
+.comment {
+  padding: 10px;
   font-size: 1rem;
-background: rgba(0,0,0,.1);
-border: 1.5px solid rgba(255,255,255,.7);
-box-shadow: 0 0 20px #fffa, inset 0 0 0 1px #000a, inset 0 0 10px 1px #000a;
-color: #fff;
-text-shadow: 0 0 15px rgb(0,0,0),0 0 10px rgba(0,0,0,.75),0 0 5px rgba(0,0,0,.5);
+  background: rgba(0,0,0,.2);
+  box-shadow: inset 0 0 0 1px #000a,inset 0 0 10px 1px #000a;
+  color: #fff;
+  text-shadow: 0 0 15px rgb(0,0,0),0 0 10px rgba(0,0,0,.75),0 0 5px rgba(0,0,0,.5)
 }
 .meta {
   font-size: .9rem;
   color: rgb(255 255 255 / 90%);
   margin-bottom: 5px
 }
-
 .content {
   font-size: 1.1rem;
   color: #fff
