@@ -354,12 +354,11 @@ input[type=text]:focus {
   justify-content: center
 }
 
-.comment-panel {
+.panel {
   position: fixed;
   inset: 0;
   display: flex;
   box-shadow: 0 0 10px #000;
-  z-index: 50;
   background: rgba(0,0,0,.1);
   border: 1.5px solid rgba(0,0,0,.7);
   box-shadow: 0 0 30px #000a, inset 0 0 0 1px #fffa, inset 0 0 10px 1px #fffa;
@@ -369,6 +368,9 @@ input[type=text]:focus {
   text-shadow: 0 0 15px rgb(0,0,0),0 0 10px rgba(0,0,0,.75),0 0 5px rgba(0,0,0,.5);
   animation: slideIn .5s ease forwards
 }
+
+.panel.comments { z-index: 50; }
+.panel.comment-actions { z-index: 60 }
 
 @keyframes slideIn {
   from {

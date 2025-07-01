@@ -18,6 +18,8 @@ let caller_account_copy_failed = false;
 /*
 todo: delete button, confirm, deleted view
 todo: sorter (new/hot)
+todo: put thread details in comment panel
+todo: put reply details in comment-action panel
 todo: wallet pane to withdraw/(logout+revoke)
 todo: combine post+pay popup
 todo: replace input with textarea
@@ -104,6 +106,7 @@ let selected_delete_token_canister = null;
 let selected_delete_fee_rate = null;
 
 let is_comments_open = false;
+let is_comment_action_open = false;
 let is_posting = false;
 let is_creating_new_post = false;
 let is_waiting_balance = false;
@@ -390,6 +393,7 @@ class App {
     this.root = document.getElementById('root');
     
     this.activeThread = null;
+    this.interestingReply = null;
     this.threadComments = [];
     this.commentInput = "";
 
@@ -514,13 +518,27 @@ class App {
 
   closeReplies(e) {
     e.preventDefault();
-    const panel = document.querySelector('.comment-panel');
+    const panel = document.querySelector('.panel.comments');
     if (panel) {
       panel.classList.remove('slide-in');
       panel.classList.add('slide-out');
       setTimeout(() => {
         is_comments_open = false;
         this.activeThread = null;
+        this.renderPosts();
+      }, 500); // matches slideOut animation duration
+    }
+  }
+
+  closeReply(e) {
+    e.preventDefault();
+    const panel = document.querySelector('.panel.comment-actions');
+    if (panel) {
+      panel.classList.remove('slide-in');
+      panel.classList.add('slide-out');
+      setTimeout(() => {
+        is_comment_action_open = false;
+        this.interestingReply = null;
         this.renderPosts();
       }, 500); // matches slideOut animation duration
     }
@@ -940,6 +958,13 @@ class App {
     this.renderPosts(); 
   }
 
+  openReply(e, post) {
+    e.preventDefault();
+    is_comment_action_open = true;
+    this.interestingReply = post;
+    this.renderPosts();
+  }
+
   renderPosts() {
     if (this.isSliding) return;
     let current_post;
@@ -970,14 +995,14 @@ class App {
     `;
     const replies_pane = this.posts.length > 0 && is_comments_open && this.activeThread
     ? html`
-        <div class="comment-panel slide-in">
+        <div class="panel comments slide-in">
           <div class="comment-list">
             <div class="comment-grid">
               <div class="comment">
                 <div class="meta">#${this.activeThread.id} • ${shortPrincipal(this.activeThread.owner)}${this.activeThread.timestamp ? ' • ' + timeAgo(this.activeThread.timestamp) : ''}</div>
                 <div class="content">${this.activeThread.content}</div>
               </div>
-              <button class="action-btn">⋮</button>
+              <button class="action-btn" @click=${(e) => this.openReply(e, this.activeThread)}>⋮</button>
             </div>
             ${this.threadComments.map(comment => html`
               <div class="comment-grid">
@@ -985,7 +1010,7 @@ class App {
                   <div class="meta">#${comment.id} • ${shortPrincipal(comment.owner)}${comment.timestamp ? ` • ${timeAgo(comment.timestamp)}` : ''}</div>
                   <div class="content">${comment.content}</div>
                 </div>
-                <button class="action-btn">⋮</button>
+                <button class="action-btn" @click=${(e) => this.openReply(e, comment)}>⋮</button>
               </div>
             `)}
           </div>
@@ -1003,7 +1028,18 @@ class App {
       ` : null;
       // todo: fix the small text since we've using 1.25 rem
       // todo: reduce to 1rem on default text
-    const create_new_post_form = html`
+    const reply_action_pane = is_comment_action_open && this.interestingReply? html`
+    <div class="panel comment-actions slide-in">
+      <div class="comment-list">
+        <p>${this.interestingReply.content}</p>
+      </div>
+      <div class="action-bar sticky">
+        <button class="action-btn" @click=${(e) => this.closeReply(e)}>Close</button>
+      </div>
+    </div>
+    ` : null;
+    
+      const create_new_post_form = html`
       ${is_composing_post
       ? html`<div class="backdraw compose" @click=${(e) => this.closeCompose(e)}></div>` : null}
       <div class="drawer compose ${is_composing_post ? 'open' : ''}">
@@ -1258,6 +1294,7 @@ class App {
       <button class="action-btn" @click=${(e) => this.openReplies(e)}>Open Replies</button>
     </div>
     ${replies_pane}
+    ${reply_action_pane}
     ${create_new_post_form}        
     ${wallet_selectors}
     ${cost_and_reasons}
