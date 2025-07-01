@@ -16,12 +16,11 @@ let caller_account_copied = false;
 let caller_account_copy_failed = false;
 
 /*
-todo: delete button, confirm, deleted view
+todo: fix snappy drawer close when sending posts
+todo: deleted view
 todo: sorter (new/hot)
 todo: put thread details in comment panel
-todo: put reply details in comment-action panel
 todo: wallet pane to withdraw/(logout+revoke)
-todo: combine post+pay popup
 todo: replace input with textarea
 todo: whitespace cleaner
 todo: long text cut-off with "..."
@@ -30,6 +29,7 @@ todo: cache threads/replies
 todo: tipping button, tipping form, tipped view
 todo: report button, report form, reported view
 todo: appeal button, appeal form, appealed view
+todo: combine post+pay popup?
 todo: load comments on slide
 todo: fix normal button's gloss
 todo: fix radio button disabled css
@@ -114,6 +114,8 @@ let is_viewing_cost_details = false;
 let is_checking_balance = false;
 let is_waiting_approval = false;
 let is_approving = false;
+let is_delete_open = false;
+let is_deleting = false;
 let token_id = null;
 
 let post_content = "";
@@ -373,7 +375,21 @@ function focusPostInput() {
     setTimeout(() => {
       submit.scrollIntoView({ behavior: 'smooth', block: 'end' });
     }, 200); // Wait for keyboard to show (tweak for device)
-  }, 400); // Wait for slide-in animation to end
+  }, 500); // Wait for slide-in animation to end
+}
+
+function closeDrawer(name, cb) {
+  const drawer = document.querySelector('.drawer.' + name);
+  if (drawer) {
+    drawer.classList.remove('slide-in-up');
+    drawer.classList.add('slide-out-down');
+  };
+  const backdraw = document.querySelector('.backdraw.' + name);
+  if (backdraw) {
+    backdraw.classList.remove('fade-in');
+    backdraw.classList.add('fade-out');
+  }
+  setTimeout(cb, 500);
 }
 
 class App {
@@ -398,7 +414,7 @@ class App {
     this.commentInput = "";
 
     this.setupScroll();
-    this.setupIdentity();
+    this.setupIdentity(); //todo: enable this
     this.renderPosts();
     this.getPosts();
   }
@@ -512,7 +528,7 @@ class App {
         if (newIndex == this.posts.length - 1) this.getPosts(); 
         this.renderPosts();
         resolve();
-      }, 600);
+      }, 500);
     });
   }
 
@@ -520,8 +536,8 @@ class App {
     e.preventDefault();
     const panel = document.querySelector('.panel.comments');
     if (panel) {
-      panel.classList.remove('slide-in');
-      panel.classList.add('slide-out');
+      panel.classList.remove('slide-in-left');
+      panel.classList.add('slide-out-right');
       setTimeout(() => {
         is_comments_open = false;
         this.activeThread = null;
@@ -534,8 +550,8 @@ class App {
     e.preventDefault();
     const panel = document.querySelector('.panel.comment-actions');
     if (panel) {
-      panel.classList.remove('slide-in');
-      panel.classList.add('slide-out');
+      panel.classList.remove('slide-in-left');
+      panel.classList.add('slide-out-right');
       setTimeout(() => {
         is_comment_action_open = false;
         this.interestingReply = null;
@@ -774,20 +790,23 @@ class App {
     }
   }
 
+  closePopup(e) {
+    e.preventDefault();
+    const popup_exist = document.querySelector('.popup');
+    if (popup_exist) {
+      popup_exist.classList.remove('in');
+      popup_exist.classList.add('out');
+      setTimeout(() => {
+        popup_html = null;
+        this.renderPosts();
+      }, 300);
+    }
+  }
+
   showPopup(title = 'Error', subtitle = 'Check console', buttons = [{ 
     label: 'Close', 
-    click: (e) => {
-      e.preventDefault();
-      const popup_exist = document.querySelector('.popup');
-      if (popup_exist) {
-        popup_exist.classList.remove('in');
-        popup_exist.classList.add('out');
-        setTimeout(() => {
-          popup_html = null;
-          this.renderPosts();
-        }, 300);
-      }
-    }}]) {
+    click: (e) => this.closePopup(e) }
+  ]) {
     popup_html = html`<p>
       <strong>${title}</strong><br>
       <small>${subtitle}</small>
@@ -914,48 +933,60 @@ class App {
   closeCompose(e) {
     e.preventDefault();
     if (is_posting) return;
-    is_composing_post = false;
-    is_seeing_cost = false;
-    is_paying = false;
-    this.renderPosts(); 
+    closeDrawer('compose', () => {
+      is_composing_post = false;
+      is_seeing_cost = false;
+      is_paying = false;
+      this.renderPosts(); 
+    });
   }
 
   closePayment(e) {
     e.preventDefault();
     if (is_paying) return;
-    is_seeing_cost = false;
-    is_posting = false;
-    this.renderPosts(); 
+    closeDrawer('cost', () => {
+      is_seeing_cost = false;
+      is_posting = false;
+      this.renderPosts();
+    })     
   };
 
   closeLogin(e) {
     e.preventDefault();
-    this.isSelectingWallet = false; 
-    this.isConnectingWallet = false;
-    is_posting = false;
-    this.renderPosts(); 
+    closeDrawer('wallet', () => {
+      this.isSelectingWallet = false; 
+      this.isConnectingWallet = false;
+      is_posting = false;
+      this.renderPosts(); 
+    });
   }
 
   closeBalanceWaiter(e) {
     e.preventDefault();
     if (is_checking_balance) return;
-    is_waiting_balance = false;
-    is_paying = false;
-    this.renderPosts(); 
+    closeDrawer('balance', () => {
+      is_waiting_balance = false;
+      is_paying = false;
+      this.renderPosts(); 
+    })
   }
 
   closeApprovalWaiter(e) {
     e.preventDefault();
     if (is_approving) return;
-    is_waiting_approval = false;
-    is_paying = false;
-    this.renderPosts();
+    closeDrawer('approve', () => {
+      is_waiting_approval = false;
+      is_paying = false;
+      this.renderPosts();
+    })
   }
 
   closeCostDetails(e) {
     e.preventDefault();
-    is_viewing_cost_details = false; 
-    this.renderPosts(); 
+    closeDrawer('cost-breakdown', () => {
+      is_viewing_cost_details = false; 
+      this.renderPosts(); 
+    })
   }
 
   openReply(e, post) {
@@ -963,6 +994,27 @@ class App {
     is_comment_action_open = true;
     this.interestingReply = post;
     this.renderPosts();
+  }
+
+  openDeleteConfirm(e) {
+    e.preventDefault();
+    // this.showPopup('Delete Confirmation', "There's no going back. Are you sure?", [{
+    //   label: 'Cancel',
+    //   click: (ee) => this.closePopup(ee),
+    // }, {
+    //   label: 'Delete',
+    //   click: (ee) => {},
+    // }]);
+    is_delete_open = true;
+    this.renderPosts();
+  }
+
+  closeDeleteConfirm(e) {
+    e.preventDefault();
+    closeDrawer('delete-confirm', () => {
+      is_delete_open = false;
+      this.renderPosts();
+    });
   }
 
   renderPosts() {
@@ -995,7 +1047,7 @@ class App {
     `;
     const replies_pane = this.posts.length > 0 && is_comments_open && this.activeThread
     ? html`
-        <div class="panel comments slide-in">
+        <div class="panel comments slide-in-left">
           <div class="comment-list">
             <div class="comment-grid">
               <div class="comment">
@@ -1029,20 +1081,29 @@ class App {
       // todo: fix the small text since we've using 1.25 rem
       // todo: reduce to 1rem on default text
     const reply_action_pane = is_comment_action_open && this.interestingReply? html`
-    <div class="panel comment-actions slide-in">
+    <div class="panel comment-actions slide-in-left">
       <div class="comment-list">
-        <p>${this.interestingReply.content}</p>
+        <p>
+          <strong>${this.interestingReply.content}</strong><br><br>
+          <small>
+            <i>by, ${this.interestingReply.owner.toText()}</i><br><br>
+            at, ${this.interestingReply.timestamp.toLocaleString()}
+          </small>
+        </p>
       </div>
       <div class="action-bar sticky">
         <button class="action-btn" @click=${(e) => this.closeReply(e)}>Close</button>
+        ${caller_principal && this.interestingReply.owner.toText() == caller_principal.toText() ? 
+          html`<button class="action-btn failed" @click=${(e) => this.openDeleteConfirm(e)}>Delete</button>`
+          : html`<button class="action-btn success" ?disabled=${true}>Tip</button>`
+        }
       </div>
     </div>
     ` : null;
     
-      const create_new_post_form = html`
-      ${is_composing_post
-      ? html`<div class="backdraw compose" @click=${(e) => this.closeCompose(e)}></div>` : null}
-      <div class="drawer compose ${is_composing_post ? 'open' : ''}">
+    const create_new_post_form = is_composing_post
+      ? html`<div class="backdraw compose fade-in" @click=${(e) => this.closeCompose(e)}></div>
+      <div class="drawer compose slide-in-up">
         <p>
           <strong>${
             // post_input_pitch.header
@@ -1067,12 +1128,23 @@ class App {
             : html`➤ Send`}</button>
         </div>
       </div>
-    `;
-    const wallet_selectors = html`
-      ${this.isSelectingWallet
-      ? html`<div class="backdraw wallet" @click=${(e) => this.closeLogin(e)}></div>`
-      : null}
-      <div class="drawer wallet ${this.isSelectingWallet ? 'open' : ''}">
+    ` : null;
+    const delete_confirm_form = is_delete_open? html`
+    <div class="backdraw delete-confirm fade-in" @click=${(e) => this.closeDeleteConfirm(e)}>
+    </div>
+    <div class="drawer delete-confirm slide-in-up">
+      <p>
+        <strong>Delete Confirmation</strong><br>
+        <small>There's no going back. Are you sure?</small>
+      </p>
+      <div class="action-bar">
+        <button class="action-btn success" @click=${(e) => this.closeDeleteConfirm(e)}>No</button>
+        <button class="action-btn failed" @click=${(e) => {}}>Yes, Delete</button>
+      </div>
+    </div>` : null; 
+    const wallet_selectors = this.isSelectingWallet
+      ? html`<div class="backdraw wallet fade-in" @click=${(e) => this.closeLogin(e)}></div>
+      <div class="drawer wallet slide-in-up">
         <p>
           <strong>${sign_in_pitch.header}</strong><br>
           <small><small>${sign_in_pitch.body}</small></small>
@@ -1084,16 +1156,16 @@ class App {
             : html`Sign in via Internet ID`}</button>
         </div>
       </div>
-    `;
-
+    ` : null;
+    
   //   const token_selectors = html`
   //   ${this.isSelectingToken
-  //   ? html`<div class="backdraw token" @click=${() => { 
+  //   ? html`<div class="backdraw token fade-in" @click=${() => { 
   //       this.isSelectingToken = false; 
   //       this.renderPosts(); 
   //     }}></div>`
   //   : null}
-  //   <div class="drawer token ${this.isSelectingToken ? 'open' : ''}">
+  //   <div class="drawer token slide-in-up">
   //     <div>Select the token of your post</div>
       
   //     <button class="send-btn" ?disabled=${this.isConnectingWallet} @click=${(e) => this.loginInternetIdentity(e)}>
@@ -1103,11 +1175,9 @@ class App {
   //       </button>
   //   </div>
   // `;
-      const cost_and_reasons = html`
-      ${is_seeing_cost
-      ? html`<div class="backdraw cost" @click=${(e) => this.closePayment(e)}></div>`
-      : null}
-      <div class="drawer cost ${is_seeing_cost ? 'open' : ''}">
+    const cost_and_reasons = is_seeing_cost
+      ? html`<div class="backdraw cost fade-in" @click=${(e) => this.closePayment(e)}></div>
+      <div class="drawer cost slide-in-up">
         <p>
           <strong>${token_total.msg}</strong>
           <button class="action-btn compact" @click=${(e) => this.viewTokenDetails(e)}>Show fee details</button>
@@ -1122,12 +1192,10 @@ class App {
           }}>${is_paying ? html`<span class="spinner"></span> Paying...` : html`Pay`}</button>
         </div>
       </div>
-    `;
-    const token_balance_waiter_details = html`
-    ${is_viewing_cost_details
-    ? html`<div class="backdraw cost-breakdown" @click=${(e) => this.closeCostDetails(e)}></div>`
-    : null}
-    <div class="drawer cost-breakdown ${is_viewing_cost_details ? 'open' : ''}">
+    ` : null;
+    const token_balance_waiter_details = is_viewing_cost_details
+    ? html`<div class="backdraw cost-breakdown fade-in" @click=${(e) => this.closeCostDetails(e)}></div>
+    <div class="drawer cost-breakdown slide-in-up">
       <p>
       <strong>Fee Details</strong>
       <br>
@@ -1142,11 +1210,10 @@ class App {
         <button class="action-btn" @click=${(e) => this.closeCostDetails(e)}>Close</button>
       </div>
     </div>
-  `;
-    const token_balance_waiter = html`${is_waiting_balance
-    ? html`<div class="backdraw balance" @click=${(e) => this.closeBalanceWaiter(e)}></div>`
-    : null}
-    <div class="drawer balance ${is_waiting_balance ? 'open' : ''}">
+    ` : null;
+    const token_balance_waiter = is_waiting_balance
+    ? html`<div class="backdraw balance fade-in" @click=${(e) => this.closeBalanceWaiter(e)}></div>
+    <div class="drawer balance slide-in-up">
       <p>
         <strong>${top_up_pitch.header}</strong>
         <!-- <br><small><small>${top_up_pitch.body}</small></small> -->
@@ -1216,12 +1283,10 @@ class App {
         </button>
       </div>
     </div>
-`;
-  const token_approve_form = html`
-      ${is_waiting_approval
-      ? html`<div class="backdraw approve" @click=${(e) => this.closeApprovalWaiter(e)}></div>`
-      : null}
-      <div class="drawer approve ${is_waiting_approval ? 'open' : ''}">
+    ` : null;
+    const token_approve_form = is_waiting_approval
+      ? html`<div class="backdraw approve fade-in" @click=${(e) => this.closeApprovalWaiter(e)}></div>
+      <div class="drawer approve slide-in-up">
         <p>
           <strong>${approval_pitch.header}</strong><br>
           <small><small>Save time and cut down on ${token_symbol} approval fees.</small></small><br>
@@ -1271,11 +1336,11 @@ class App {
           </button>
         </div>
       </div>
-    `;
-  const popup = popup_html ? html`
-    <div class="backdraw popup"></div>
+    ` : null;
+    const popup = popup_html ? html`
+    <div class="backdraw zpopup"></div>
     <div class="popup in">${popup_html}</div>
-  ` : null;
+    ` : null;
 
     render(html`
     <header class="logo-bar">
@@ -1295,7 +1360,8 @@ class App {
     </div>
     ${replies_pane}
     ${reply_action_pane}
-    ${create_new_post_form}        
+    ${create_new_post_form}   
+    ${delete_confirm_form}     
     ${wallet_selectors}
     ${cost_and_reasons}
     ${token_balance_waiter}
