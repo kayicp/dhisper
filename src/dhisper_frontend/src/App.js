@@ -16,11 +16,11 @@ let caller_account_copied = false;
 let caller_account_copy_failed = false;
 
 /*
-todo: fix snappy drawer close when sending posts
 todo: deleted view
 todo: sorter (new/hot)
 todo: put thread details in comment panel
 todo: wallet pane to withdraw/(logout+revoke)
+todo: replace css animation with css transition
 todo: replace input with textarea
 todo: whitespace cleaner
 todo: long text cut-off with "..."
@@ -108,7 +108,6 @@ let selected_delete_fee_rate = null;
 let is_comments_open = false;
 let is_comment_action_open = false;
 let is_posting = false;
-let is_creating_new_post = false;
 let is_waiting_balance = false;
 let is_viewing_cost_details = false;
 let is_checking_balance = false;
@@ -375,7 +374,7 @@ function focusPostInput() {
     setTimeout(() => {
       submit.scrollIntoView({ behavior: 'smooth', block: 'end' });
     }, 200); // Wait for keyboard to show (tweak for device)
-  }, 500); // Wait for slide-in animation to end
+  }, 400); // Wait for slide-in animation to end
 }
 
 function closeDrawer(name, cb) {
@@ -414,7 +413,7 @@ class App {
     this.commentInput = "";
 
     this.setupScroll();
-    this.setupIdentity(); //todo: enable this
+    // this.setupIdentity(); //todo: enable this
     this.renderPosts();
     this.getPosts();
   }
@@ -691,15 +690,13 @@ class App {
         is_waiting_balance = true;
         return this.renderPosts();
       };
-      is_waiting_balance = false;
+      this.closeBalanceWaiter(e, true);
+
       if (require_approval) {
         is_waiting_approval = true;
         return this.renderPosts();
-      } else is_seeing_cost = false;
+      } else this.closePayment(e, true);
   
-      is_posting = true;
-      is_creating_new_post = true;
-      this.renderPosts();
       const dhisper_user = genDhisper(dhisper_id, { agent: caller_agent });
       const create_post_res = await dhisper_user.kay4_create({
         thread: this.activeThread ? [this.activeThread.id] : [],
@@ -713,46 +710,45 @@ class App {
           fee: [BigInt(base_cost + extra_cost)]
         } }
       });
-      is_creating_new_post = false;
-      is_posting = false;
       is_paying = false;
-      is_composing_post = 'Err' in create_post_res;
-      if (is_composing_post) {
+      is_posting = false;
+      if ('Err' in create_post_res) {
         this.errPopup("Create Post Error", create_post_res.Err);
       } else {
+        this.closeCompose(e);
         // todo: track background process instead of this
         if (this.activeThread) {
           this.getComments();
         } else try {
-            const id = create_post_res.Ok;
-            let content = '';
-            let timestamp = '';
-            let owner = Principal.anonymous();
-            await Promise.all([
-              new Promise((resolve) => {(async () => {
-                const contents = await dhisper_anon.kay4_contents_of([id]);
-                content = contents[0].length > 0? contents[0][0] : "";
-                resolve();
-              })()}),
-              new Promise((resolve) => {(async () => {
-                const timestamps = await dhisper_anon.kay4_timestamps_of([id]);
-                timestamp = timestamps[0].length > 0? new Date(Number(timestamps[0][0]) / 1000000) : null;
-                resolve();
-              })()}),
-              new Promise((resolve) => {(async () => {
-                const owners = await dhisper_anon.kay4_owners_of(id, [], [1]);
-                owner = owners.length > 0? owners[0].ICRC_1.owner : Principal.anonymous();
-                resolve();
-              })()}),
-            ]);
-            const new_post = { id, content, timestamp, owner };
-            if (this.currentIndex == null) this.posts = [new_post]; else {
-              this.posts = [new_post, this.posts[this.currentIndex]];
-              this.currentIndex = 1;
-            };
-            this.startSlide(0, 'down');
-            this.posts = [new_post];
-            this.currentIndex = 0;
+          const id = create_post_res.Ok;
+          let content = '';
+          let timestamp = '';
+          let owner = Principal.anonymous();
+          await Promise.all([
+            new Promise((resolve) => {(async () => {
+              const contents = await dhisper_anon.kay4_contents_of([id]);
+              content = contents[0].length > 0? contents[0][0] : "";
+              resolve();
+            })()}),
+            new Promise((resolve) => {(async () => {
+              const timestamps = await dhisper_anon.kay4_timestamps_of([id]);
+              timestamp = timestamps[0].length > 0? new Date(Number(timestamps[0][0]) / 1000000) : null;
+              resolve();
+            })()}),
+            new Promise((resolve) => {(async () => {
+              const owners = await dhisper_anon.kay4_owners_of(id, [], [1]);
+              owner = owners.length > 0? owners[0].ICRC_1.owner : Principal.anonymous();
+              resolve();
+            })()}),
+          ]);
+          const new_post = { id, content, timestamp, owner };
+          if (this.currentIndex == null) this.posts = [new_post]; else {
+            this.posts = [new_post, this.posts[this.currentIndex]];
+            this.currentIndex = 1;
+          };
+          this.startSlide(0, 'down');
+          this.posts = [new_post];
+          this.currentIndex = 0;
         } catch (err) {
           this.catchPopup("Error while Fetching Created Post", err);
         }
@@ -887,9 +883,9 @@ class App {
       const err_title = "Error after Authentication";
       if (e == null) this.catchPopup(err_title, err); else console.error(err_title, err);
     }
-    this.isSelectingWallet = false;
-    this.isConnectingWallet = false;
-    if (e != null) this.renderPosts();
+    if (e != null) {
+      this.closeLogin(e, !is_posting);
+    } else this.closeLogin(e);
   }
 
   async approveToken(e) {
@@ -919,7 +915,7 @@ class App {
           break;
         }
         this.showPopup(title, subtitle);
-      } else is_waiting_approval = false;
+      } else this.closeApprovalWaiter(e, true);
       if (is_posting) {
         this.createNewPost(e);
       }; 
@@ -941,42 +937,44 @@ class App {
     });
   }
 
-  closePayment(e) {
+  closePayment(e, force = false) {
     e.preventDefault();
-    if (is_paying) return;
+    if (!force && is_paying) return;
     closeDrawer('cost', () => {
       is_seeing_cost = false;
-      is_posting = false;
+      if (!force) is_posting = false;
       this.renderPosts();
     })     
   };
 
-  closeLogin(e) {
+  closeLogin(e, reset = true) {
     e.preventDefault();
     closeDrawer('wallet', () => {
       this.isSelectingWallet = false; 
       this.isConnectingWallet = false;
-      is_posting = false;
+      if (reset) {
+        is_posting = false;
+      };
       this.renderPosts(); 
     });
   }
 
-  closeBalanceWaiter(e) {
+  closeBalanceWaiter(e, force = false) {
     e.preventDefault();
-    if (is_checking_balance) return;
+    if (!force && is_checking_balance) return;
     closeDrawer('balance', () => {
       is_waiting_balance = false;
-      is_paying = false;
+      if (!force) is_paying = false;
       this.renderPosts(); 
     })
   }
 
-  closeApprovalWaiter(e) {
+  closeApprovalWaiter(e, force = false) {
     e.preventDefault();
-    if (is_approving) return;
+    if (!force && is_approving) return;
     closeDrawer('approve', () => {
       is_waiting_approval = false;
-      is_paying = false;
+      if (!force) is_paying = false;
       this.renderPosts();
     })
   }
