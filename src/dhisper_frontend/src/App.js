@@ -16,8 +16,9 @@ let caller_account_copied = false;
 let caller_account_copy_failed = false;
 
 /*
-todo: deleted view
 todo: sorter (new/hot)
+todo: maybe free reply for max 16 chars? redo canister metadata
+todo: make Post2 type to include tips/reports/moderations? remove hash too, not needed
 todo: put thread details in comment panel
 todo: wallet pane to withdraw/(logout+revoke)
 todo: replace css animation with css transition
@@ -630,7 +631,7 @@ class App {
     };
     is_posting = true;
     this.renderPosts();
-    if (caller_principal == null) {
+    if (caller_principal == null || caller_agent == null) {
       return this.selectWallet(e);
     }
     // check for token balance
@@ -716,7 +717,6 @@ class App {
         this.errPopup("Create Post Error", create_post_res.Err);
       } else {
         this.closeCompose(e);
-        // todo: track background process instead of this
         if (this.activeThread) {
           this.getComments();
         } else try {
@@ -795,11 +795,11 @@ class App {
       setTimeout(() => {
         popup_html = null;
         this.renderPosts();
-      }, 300);
+      }, 500);
     }
   }
 
-  showPopup(title = 'Error', subtitle = 'Check console', buttons = [{ 
+  showPopup(title = 'Error', subtitle = 'Check console', buttons = [{
     label: 'Close', 
     click: (e) => this.closePopup(e) }
   ]) {
@@ -1009,10 +1009,45 @@ class App {
 
   closeDeleteConfirm(e) {
     e.preventDefault();
+    if (is_deleting) return;
     closeDrawer('delete-confirm', () => {
       is_delete_open = false;
       this.renderPosts();
     });
+  }
+
+  async deletePost(e) {
+    e.preventDefault();
+    if (caller_agent == null) {
+      return this.selectWallet(e);
+    };
+    const dhisper_user = genDhisper(dhisper_id, { agent: caller_agent });
+    is_deleting = true;
+    this.renderPosts();
+    try {
+      const delete_post_res = await dhisper_user.kay4_delete({
+        id: this.interestingReply.id,
+        authorization: {
+          None : { subaccount: [] }
+        }
+      });
+      is_deleting = false;
+      if ('Err' in delete_post_res) {
+        this.errPopup("Delete Post Error", delete_post_res.Err);
+      } else {
+        // this.showPopup("Delete Successful", "");
+        this.closeDeleteConfirm(e);
+        if (this.activeThread) {
+          this.getComments();
+        }
+        this.interestingReply.content = "";
+        this.interestingReply.owner = Principal.anonymous();
+      }
+    } catch (err) {
+      is_deleting = false;
+      this.catchPopup("Error while Delete Post", err);
+    }
+    this.renderPosts();
   }
 
   renderPosts() {
@@ -1027,16 +1062,16 @@ class App {
       const currentPost = this.posts[this.currentIndex];
       current_post = html`<div class="post-content-wrapper">
         <div class="text">${currentPost?.content ?? ''}</div>
-        <div class="subtext">${currentPost? shortPrincipal(currentPost.owner) : ''}<br>${currentPost ? timeAgo(currentPost.timestamp) : ''}</div>
+        <div class="subtext">${currentPost?.owner? currentPost.owner.isAnonymous()? 'DELETED' : shortPrincipal(currentPost.owner) : ''}<br>${currentPost ? timeAgo(currentPost.timestamp) : ''}</div>
       </div>`;
     }
     let next_post;
     if (this.nextIndex == null) next_post = null; else {
       const nextPost = this.posts[this.nextIndex];
-      console.log({ nextPost });
+      // console.log({ nextPost });
       next_post = nextPost ? html`<div class="post-content-wrapper">
         <div class="text">${nextPost.content}</div>
-        <div class="subtext">${shortPrincipal(nextPost.owner)}<br>${timeAgo(nextPost.timestamp)}</div>
+        <div class="subtext">${nextPost.owner.isAnonymous()? 'DELETED' : shortPrincipal(nextPost.owner)}<br>${timeAgo(nextPost.timestamp)}</div>
       </div>` : null;
     }
     
@@ -1049,7 +1084,7 @@ class App {
           <div class="comment-list">
             <div class="comment-grid">
               <div class="comment">
-                <div class="meta">#${this.activeThread.id} • ${shortPrincipal(this.activeThread.owner)}${this.activeThread.timestamp ? ' • ' + timeAgo(this.activeThread.timestamp) : ''}</div>
+                <div class="meta">#${this.activeThread.id} • ${this.activeThread.owner .isAnonymous()? 'DELETED' : shortPrincipal(this.activeThread.owner)}${this.activeThread.timestamp ? ' • ' + timeAgo(this.activeThread.timestamp) : ''}</div>
                 <div class="content">${this.activeThread.content}</div>
               </div>
               <button class="action-btn" @click=${(e) => this.openReply(e, this.activeThread)}>⋮</button>
@@ -1057,7 +1092,7 @@ class App {
             ${this.threadComments.map(comment => html`
               <div class="comment-grid">
                 <div class="comment">
-                  <div class="meta">#${comment.id} • ${shortPrincipal(comment.owner)}${comment.timestamp ? ` • ${timeAgo(comment.timestamp)}` : ''}</div>
+                  <div class="meta">#${comment.id} • ${comment.owner.isAnonymous()? 'DELETED' : shortPrincipal(comment.owner)}${comment.timestamp ? ` • ${timeAgo(comment.timestamp)}` : ''}</div>
                   <div class="content">${comment.content}</div>
                 </div>
                 <button class="action-btn" @click=${(e) => this.openReply(e, comment)}>⋮</button>
@@ -1082,9 +1117,9 @@ class App {
     <div class="panel comment-actions slide-in-left">
       <div class="comment-list">
         <p>
-          <strong>${this.interestingReply.content}</strong><br><br>
+          ${this.interestingReply.owner.isAnonymous()? '' : html`<strong>${this.interestingReply.content}</strong><br><br>`}
           <small>
-            <i>by, ${this.interestingReply.owner.toText()}</i><br><br>
+            ${this.interestingReply.owner.isAnonymous()? html`<strong>DELETED</strong>` : html`<i>by, ${this.interestingReply.owner.toText()}</i>`}<br><br>
             at, ${this.interestingReply.timestamp.toLocaleString()}
           </small>
         </p>
@@ -1136,10 +1171,11 @@ class App {
         <small>There's no going back. Are you sure?</small>
       </p>
       <div class="action-bar">
-        <button class="action-btn success" @click=${(e) => this.closeDeleteConfirm(e)}>No</button>
-        <button class="action-btn failed" @click=${(e) => {}}>Yes, Delete</button>
+        <button class="action-btn success" ?disabled=${is_deleting} @click=${(e) => this.closeDeleteConfirm(e)}>No</button>
+        <button class="action-btn failed" ?disabled=${is_deleting} @click=${(e) => this.deletePost(e)}>${is_deleting? html`<span class="spinner"></span> Deleting...` : html`Yes, Delete`}</button>
       </div>
-    </div>` : null; 
+    </div>` : null;
+    
     const wallet_selectors = this.isSelectingWallet
       ? html`<div class="backdraw wallet fade-in" @click=${(e) => this.closeLogin(e)}></div>
       <div class="drawer wallet slide-in-up">

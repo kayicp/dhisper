@@ -276,30 +276,28 @@ p {
 
 @keyframes popup-slide-in {
   0% {
-      transform: translate(-50%,200%)
+    transform: translate(-50%,150%)
   }
-
   to {
-      transform: translate(-50%,-50%)
+    transform: translate(-50%,-50%)
   }
 }
 
 @keyframes popup-slide-out {
   0% {
-      transform: translate(-50%,-50%)
+    transform: translate(-50%,-50%)
   }
-
   to {
-      transform: translate(-50%,200%)
+    transform: translate(-50%,150%)
   }
 }
 
 .popup.in {
-  animation: popup-slide-in 0.3s ease forwards;
+  animation: popup-slide-in 0.5s ease forwards;
 }
 
 .popup.out {
-  animation: popup-slide-out 0.3s ease forwards;
+  animation: popup-slide-out 0.5s ease forwards;
 }
 
 input[type=text] {
@@ -437,20 +435,18 @@ input[type=text]:focus {
   grid-template-columns: 1fr 25px;
   box-shadow: 0 0 20px #fffa;
   border: 1.5px solid rgba(255,255,255,.7);
-  
 }
 .comment {
   padding: 10px;
   font-size: 1rem;
-  background: rgba(0,0,0,.2);
+  background: rgba(0,0,0,.1);
   box-shadow: inset 0 0 0 1px #000a,inset 0 0 10px 1px #000a;
   color: #fff;
   text-shadow: 0 0 15px rgb(0,0,0),0 0 10px rgba(0,0,0,.75),0 0 5px rgba(0,0,0,.5)
 }
 .meta {
   font-size: .9rem;
-  color: rgb(255 255 255 / 90%);
-  margin-bottom: 5px
+  opacity: 0.8;
 }
 .content {
   font-size: 1.1rem;

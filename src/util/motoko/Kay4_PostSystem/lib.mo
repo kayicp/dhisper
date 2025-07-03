@@ -292,6 +292,8 @@ module {
 	//     p with metadata_versions = RBTree.insert(p.metadata_versions, Nat.compare, RBTree.size(p.versions), meta)
 	//   };
 	// };
+	// todo: on postupgrade, empty the hash, dont register the hashes
+	// todo: for dhisper, delete will replace all versions so there's only one version
 
 	public func deletePost(
 		_p : Post,
