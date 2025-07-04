@@ -17,10 +17,10 @@ let caller_account_copy_failed = false;
 
 /*
 todo: sorter (new/hot)
-todo: maybe free reply for max 16 chars? redo canister metadata
+todo: wallet pane to withdraw/(logout+revoke)
+todo: maybe free reply for max 16 chars & cant receive tips? redo canister metadata
 todo: make Post2 type to include tips/reports/moderations? remove hash too, not needed
 todo: put thread details in comment panel
-todo: wallet pane to withdraw/(logout+revoke)
 todo: replace css animation with css transition
 todo: replace input with textarea
 todo: whitespace cleaner
@@ -106,6 +106,7 @@ let selected_delete_fee_standard = null;
 let selected_delete_token_canister = null;
 let selected_delete_fee_rate = null;
 
+let is_start_open = false;
 let is_comments_open = false;
 let is_comment_action_open = false;
 let is_posting = false;
@@ -315,6 +316,44 @@ function timeAgo(date) {
   return rtf.format(-diffInYears, 'year');
 }
 
+function timeUntil(futureDate) {
+  const now = new Date();
+  const diffInSeconds = Math.floor((futureDate - now) / 1000);
+
+  const rtf = new Intl.RelativeTimeFormat('en', { numeric: 'auto' });
+
+  if (diffInSeconds < 0) {
+    return 'Expired';
+  }
+
+  if (diffInSeconds < 60) {
+    return rtf.format(diffInSeconds, 'second');
+  }
+
+  const diffInMinutes = Math.floor(diffInSeconds / 60);
+  if (diffInMinutes < 60) {
+    return rtf.format(diffInMinutes, 'minute');
+  }
+
+  const diffInHours = Math.floor(diffInMinutes / 60);
+  if (diffInHours < 24) {
+    return rtf.format(diffInHours, 'hour');
+  }
+
+  const diffInDays = Math.floor(diffInHours / 24);
+  if (diffInDays < 30) {
+    return rtf.format(diffInDays, 'day');
+  }
+
+  const diffInMonths = Math.floor(diffInDays / 30);
+  if (diffInMonths < 12) {
+    return rtf.format(diffInMonths, 'month');
+  }
+
+  const diffInYears = Math.floor(diffInMonths / 12);
+  return rtf.format(diffInYears, 'year');
+}
+
 async function prepareTokens() {
   if (
     create_fee_rates == null
@@ -359,7 +398,7 @@ async function prepareTokens() {
       });
     } catch (err) {
       this.catchPopup("Error while Fetching Fee Rates", err);
-      this.renderPosts();
+      return this.renderPosts();
     }
   };
 }
@@ -643,32 +682,12 @@ class App {
     };
     
     try {
-      const token_anon = genToken(selected_create_fee_token_canister);
-      const token_fee_promise = token_anon.icrc1_fee();
-      const token_name_promise = token_anon.icrc1_name();
-      const token_symbol_promise = token_anon.icrc1_symbol();
-      const token_decimals_promise = token_anon.icrc1_decimals();
       const max_content_size_promise = dhisper_anon.kay4_max_content_size();
-      const token_balance_promise = token_anon.icrc1_balance_of({ owner : caller_principal, subaccount : [] });
-      const token_approval_promise = token_anon.icrc2_allowance({
-        spender : { owner : Principal.fromText(dhisper_id), subaccount : [] },
-        account : { owner : caller_principal, subaccount : [] }
-      });
-      is_checking_balance = true;
-      this.renderPosts();
-      token_id = selected_create_fee_token_canister;
-      token_fee = Number(await token_fee_promise);
+      await this.checkBalance();
       base_cost = Number(selected_create_fee_rate.minimum_amount);
       max_content_size = Number(await max_content_size_promise);
       extra_chars = post_content.length > max_content_size? (post_content.length - max_content_size) : 0;
       extra_cost = extra_chars > 0? extra_chars * Number(selected_create_fee_rate.additional_amount_numerator) / Number(selected_create_fee_rate.additional_byte_denominator) : 0;
-      // console.log({ extra_chars, extra_cost, max_content_size });
-      token_name = await token_name_promise;
-      token_symbol = await token_symbol_promise;
-      token_power = 10 ** Number(await token_decimals_promise);
-      token_balance = Number(await token_balance_promise);
-      token_approval = await token_approval_promise;
-      is_checking_balance = false;
   
       post_cost = base_cost + token_fee + extra_cost;
       token_approval_insufficient = token_approval.allowance < post_cost;
@@ -840,6 +859,11 @@ class App {
     this.isConnectingWallet = false;
   }
 
+  async logoutInternetIdentity(e) {
+    e.preventDefault();
+
+  }
+
   async loginInternetIdentity(e) {
     e.preventDefault();
     this.isConnectingWallet = true;
@@ -878,7 +902,7 @@ class App {
       await prepareTokens();
       if (e != null && is_posting) {
         this.createNewPost(e);
-      };
+      } else this.checkBalance();
     } catch (err) {
       const err_title = "Error after Authentication";
       if (e == null) this.catchPopup(err_title, err); else console.error(err_title, err);
@@ -894,12 +918,13 @@ class App {
     this.renderPosts();
     try {
       const token_user = genToken(selected_create_fee_token_canister, { agent: caller_agent });
+      const days30ms = 30n * 24n * 60n * 60n * 1000n; // 30 days in ms as BigInt
       const approve_res = await token_user.icrc2_approve({
         from_subaccount: [],
         amount: BigInt(post_cost * (selected_approval_plan == 'ten' ? 10 : selected_approval_plan == 'hundred' ? 100 : 1)),
         spender : { owner : Principal.fromText(dhisper_id), subaccount : [] },
         expected_allowance: [],
-        expires_at: [],
+        expires_at: [BigInt(Date.now()) * 1_000_000n + days30ms * 1_000_000n],
         fee: [token_fee],
         memo: [],
         created_at_time: [],
@@ -1050,6 +1075,65 @@ class App {
     this.renderPosts();
   }
 
+  openCompose(e) {
+    e.preventDefault();
+    is_composing_post = true;
+    thread_input_pitch = randomPitch(thread_input_pitches);
+    reply_input_pitch = randomPitch(reply_input_pitches);
+    this.renderPosts();
+    focusPostInput();
+  }
+
+  async openStart(e) {
+    e.preventDefault();
+    is_start_open = true;
+    await prepareTokens();
+    if (caller_principal) await this.checkBalance();
+    this.renderPosts();
+  }
+
+  closeStart(e) {
+    e.preventDefault();
+    const panel = document.querySelector('.panel.start');
+    if (panel) {
+      panel.classList.remove('slide-in-right');
+      panel.classList.add('slide-out-left');
+      setTimeout(() => {
+        is_start_open = false;
+        this.renderPosts();
+      }, 500); // matches slideOut animation duration
+    }
+  }
+
+  async checkBalance() {
+    const token_anon = genToken(selected_create_fee_token_canister);
+    const token_fee_promise = token_anon.icrc1_fee();
+    const token_name_promise = token_anon.icrc1_name();
+    const token_symbol_promise = token_anon.icrc1_symbol();
+    const token_decimals_promise = token_anon.icrc1_decimals();
+    
+    const token_balance_promise = token_anon.icrc1_balance_of({ owner : caller_principal, subaccount : [] });
+    const token_approval_promise = token_anon.icrc2_allowance({
+      spender : { owner : Principal.fromText(dhisper_id), subaccount : [] },
+      account : { owner : caller_principal, subaccount : [] }
+    });
+    is_checking_balance = true;
+    this.renderPosts();
+    token_id = selected_create_fee_token_canister;
+    try {
+      token_fee = Number(await token_fee_promise);
+      token_name = await token_name_promise;
+      token_symbol = await token_symbol_promise;
+      token_power = 10 ** Number(await token_decimals_promise);
+      token_balance = Number(await token_balance_promise);
+      token_approval = await token_approval_promise;
+    } catch (err) {
+      this.catchPopup("Error while Checking Balance", err);
+    }
+    console.log({ token_balance, token_power, token_approval });
+    is_checking_balance = false;
+  }
+
   renderPosts() {
     if (this.isSliding) return;
     let current_post;
@@ -1081,7 +1165,7 @@ class App {
     const replies_pane = this.posts.length > 0 && is_comments_open && this.activeThread
     ? html`
         <div class="panel comments slide-in-left">
-          <div class="comment-list">
+          <div class="panel-scroll">
             <div class="comment-grid">
               <div class="comment">
                 <div class="meta">#${this.activeThread.id} • ${this.activeThread.owner .isAnonymous()? 'DELETED' : shortPrincipal(this.activeThread.owner)}${this.activeThread.timestamp ? ' • ' + timeAgo(this.activeThread.timestamp) : ''}</div>
@@ -1101,13 +1185,7 @@ class App {
           </div>
           <div class="action-bar sticky">
             <button class="action-btn" @click=${(e) => this.closeReplies(e)}>Close</button>
-            <button class="action-btn" @click=${() => {
-              is_composing_post = true; 
-              thread_input_pitch = randomPitch(thread_input_pitches);
-              reply_input_pitch = randomPitch(reply_input_pitches);
-              this.renderPosts();
-              focusPostInput();
-            }}>Add Reply</button>
+            <button class="action-btn" @click=${(e) => this.openCompose(e)}>Add Reply</button>
           </div>
         </div>
       ` : null;
@@ -1115,7 +1193,7 @@ class App {
       // todo: reduce to 1rem on default text
     const reply_action_pane = is_comment_action_open && this.interestingReply? html`
     <div class="panel comment-actions slide-in-left">
-      <div class="comment-list">
+      <div class="panel-scroll">
         <p>
           ${this.interestingReply.owner.isAnonymous()? '' : html`<strong>${this.interestingReply.content}</strong><br><br>`}
           <small>
@@ -1133,6 +1211,31 @@ class App {
       </div>
     </div>
     ` : null;
+    // todo: show sorter
+    const start_pane = is_start_open ? html`
+    <div class="panel start slide-in-right">
+      <div class="panel-scroll">
+        <p>
+          Welcome, <strong>${caller_principal? caller_principal.toText() : `Guest`}</strong><br><br>
+          ${caller_principal? html`<small>
+            Balance: <strong>${token_power > 0? normalizeNumber(token_balance / token_power) : '0'} ${token_symbol}</strong> 
+            &nbsp<button class="action-btn compact" ?disabled=${!(token_fee > 0 && token_balance > token_fee)}>Withdraw</button><br><br>
+            ${token_approval? html`Approval: ${token_power > 0? normalizeNumber(Number(token_approval.allowance) / token_power) : '0'} ${token_symbol} 
+            &nbsp<button class="action-btn compact" ?disabled=${!(token_fee > 0 && token_balance > token_fee && token_approval.allowance > 0)}>Revoke</button><br>
+            ${token_approval.allowance > 0? 
+              html`<small><i>${token_approval.expires_at.length > 0? `Expires ${timeUntil(new Date(Number(token_approval.expires_at[0]) / 1000000))}` : 'Forever'}</i></small>` : ''
+            }<br>` : ''} 
+          </small>` : ''}
+        </p>
+      </div>
+      <div class="action-bar sticky">
+        ${caller_principal? html`<button class="action-btn failed" ?disabled=${this.isConnectingWallet} @click=${(e) => this.logoutInternetIdentity(e)}>Sign Out</button>` : html`<button class="action-btn success" ?disabled=${this.isConnectingWallet} @click=${(e) => this.loginInternetIdentity(e)}>${this.isConnectingWallet
+            ? html`<span class="spinner"></span> Connecting...`
+            : html`Sign in via Internet ID`}</button>`}
+        <button class="action-btn" @click=${(e) => this.closeStart(e)}>Close</button>
+      </div>
+    </div>
+    ` : null
     
     const create_new_post_form = is_composing_post
       ? html`<div class="backdraw compose fade-in" @click=${(e) => this.closeCompose(e)}></div>
@@ -1213,7 +1316,7 @@ class App {
       ? html`<div class="backdraw cost fade-in" @click=${(e) => this.closePayment(e)}></div>
       <div class="drawer cost slide-in-up">
         <p>
-          <strong>${token_total.msg}</strong>
+          <strong>${token_total.msg}</strong>&nbsp
           <button class="action-btn compact" @click=${(e) => this.viewTokenDetails(e)}>Show fee details</button>
           <br><br>
           <small>${post_payment_pitch}</small>
@@ -1255,7 +1358,7 @@ class App {
         <br><small>Your balance: ${is_checking_balance ? html`<span class="spinner"></span>` : normalizeNumber(token_balance / token_power)} ${token_symbol}</small>
         <br>
         <br>You need to <strong>send ${is_checking_balance ? html`<span class="spinner"></span>` : normalizeNumber((token_total.amount - token_balance) / token_power)} ${token_symbol}</strong> to one of your ${token_symbol} addresses below:<br>
-        <br><strong>• Principal</strong>: <button class="action-btn ${caller_principal_copied ? "success" : caller_principal_copy_failed ? 'failed' : ''} compact" @click=${async (e) => { 
+        <br><strong>• Principal</strong>: &nbsp<button class="action-btn ${caller_principal_copied ? "success" : caller_principal_copy_failed ? 'failed' : ''} compact" @click=${async (e) => { 
           e.preventDefault();
           try {
             await navigator.clipboard.writeText(caller_principal.toText());
@@ -1280,7 +1383,7 @@ class App {
         <br>
         <small><small><code>${caller_principal? caller_principal.toText() : ''}</code></small></small>
         <textarea id="caller_principal_text" class="copy-only"></textarea>
-        <br><br><strong>• Account</strong>: <button class="action-btn ${caller_account_copied ? "success" : caller_account_copy_failed? 'failed' : ''} compact" @click=${async (e) => { 
+        <br><br><strong>• Account</strong>: &nbsp<button class="action-btn ${caller_account_copied ? "success" : caller_account_copy_failed? 'failed' : ''} compact" @click=${async (e) => { 
           e.preventDefault();
           try {
             await navigator.clipboard.writeText(caller_account);
@@ -1382,17 +1485,12 @@ class App {
     </header>
     ${threads_pane}
     <div class="action-bar thread">
-      <!--<button class="action-btn" disabled>Refresh</button>-->
-      <button class="action-btn" @click=${() => { 
-        is_composing_post = true;
-        thread_input_pitch = randomPitch(thread_input_pitches);
-        reply_input_pitch = randomPitch(reply_input_pitches);
-        this.renderPosts();
-        focusPostInput();
-      }}>New Thread</button>
-      <button class="action-btn" @click=${(e) => this.openReplies(e)}>Open Replies</button>
+      <button class="action-btn" @click=${(e) => this.openStart(e)}>Start</button>
+      <button class="action-btn" @click=${(e) => this.openCompose(e)}>New Thread</button>
+      <button class="action-btn" @click=${(e) => this.openReplies(e)}>Replies</button>
     </div>
     ${replies_pane}
+    ${start_pane}
     ${reply_action_pane}
     ${create_new_post_form}   
     ${delete_confirm_form}     

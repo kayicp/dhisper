@@ -419,10 +419,10 @@ input[type=text]:focus {
   text-shadow: 0 0 15px rgb(0,0,0),0 0 10px rgba(0,0,0,.75),0 0 5px rgba(0,0,0,.5);
 }
 
-.panel.comments { z-index: 50; }
+.panel.comments, .panel.start { z-index: 50; }
 .panel.comment-actions { z-index: 60 }
 
-.comment-list {
+.panel-scroll {
   padding-top: 50px;
   flex: 1;
   overflow-y: auto;
@@ -600,7 +600,7 @@ input[type=text]:focus {
 }
 .action-bar.thread {
   z-index: 45;
-  box-shadow: 0 0 10px #0008
+  box-shadow: 0 0 30px #000a
 }
 
 // https://github.com/khang-nd/7.css/blob/main/gui/_window.scss
