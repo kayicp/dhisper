@@ -46,18 +46,18 @@ const post_payment_pitches = [
   html`Reach everyone. No followers needed.`,
   html`Claim your space.`,
   html`Cut the noise. Keep the signal.`,
-  html`This is the New Internet. Leave your mark.`,
+  html`Leave your mark.`,
 ];
 
 const thread_input_pitches = [
   { header: "", body: "If it matters, put it in writing.", placeholder: "Drop something they'll remember." },
   { header: "", body: "Say something worth reading.", placeholder: "Got some words that'll stop the scroll?" },
-  { header: "", body: "You're not posting. You're publishing.", placeholder: "What should they read about?" },
+  { header: "", body: "Broadcast to everyone.", placeholder: "What should they read about?" },
 ];
 
 const reply_input_pitches = [
-  { header: "", body: "Resurrect the thread.", placeholder: "What do you have to say?" },
-  { header: "", body: "Push the thread further.", placeholder: "Amplify the signal..." },
+  { header: "", body: "Revive the thread.", placeholder: "What do you have to say?" },
+  { header: "", body: "Push the thread further.", placeholder: "Keep it going..." },
   { header: "", body: "Keep the chain alive.", placeholder: "Make the thread longer..." },
 ];
 
@@ -106,6 +106,7 @@ let selected_delete_fee_standard = null;
 let selected_delete_token_canister = null;
 let selected_delete_fee_rate = null;
 
+let selected_sorting = 'new';
 let is_start_open = false;
 let is_comments_open = false;
 let is_comment_action_open = false;
@@ -428,7 +429,7 @@ function closeDrawer(name, cb) {
     backdraw.classList.remove('fade-in');
     backdraw.classList.add('fade-out');
   }
-  setTimeout(cb, 500);
+  setTimeout(cb, 400);
 }
 
 class App {
@@ -467,10 +468,11 @@ class App {
   async getPosts() {
     let post_ids = [];
     try {
+      const get_threads_fn = selected_sorting == 'new'? dhisper_anon.kay4_threads : dhisper_anon.kay4_bumps;
       if (this.posts.length > 0) {
         const last_post_id = this.posts[this.posts.length - 1].id;
-        post_ids = await dhisper_anon.kay4_threads([last_post_id], []); 
-      } else post_ids = await dhisper_anon.kay4_threads([], []);
+        post_ids = await get_threads_fn([last_post_id], []); 
+      } else post_ids = await get_threads_fn([], []);
     } catch (err) {
       this.showPopup("Error while Fetching Post IDs");
     }
@@ -567,7 +569,7 @@ class App {
         if (newIndex == this.posts.length - 1) this.getPosts(); 
         this.renderPosts();
         resolve();
-      }, 500);
+      }, 400);
     });
   }
 
@@ -581,7 +583,7 @@ class App {
         is_comments_open = false;
         this.activeThread = null;
         this.renderPosts();
-      }, 500); // matches slideOut animation duration
+      }, 400); // matches slideOut animation duration
     }
   }
 
@@ -595,7 +597,7 @@ class App {
         is_comment_action_open = false;
         this.interestingReply = null;
         this.renderPosts();
-      }, 500); // matches slideOut animation duration
+      }, 400); // matches slideOut animation duration
     }
   }
 
@@ -814,7 +816,7 @@ class App {
       setTimeout(() => {
         popup_html = null;
         this.renderPosts();
-      }, 500);
+      }, 400);
     }
   }
 
@@ -902,7 +904,10 @@ class App {
       await prepareTokens();
       if (e != null && is_posting) {
         this.createNewPost(e);
-      } else this.checkBalance();
+      } else {
+        await this.checkBalance();
+        this.renderPosts();
+      };
     } catch (err) {
       const err_title = "Error after Authentication";
       if (e == null) this.catchPopup(err_title, err); else console.error(err_title, err);
@@ -1100,8 +1105,9 @@ class App {
       panel.classList.add('slide-out-left');
       setTimeout(() => {
         is_start_open = false;
+        this.isConnectingWallet = false;
         this.renderPosts();
-      }, 500); // matches slideOut animation duration
+      }, 400); // matches slideOut animation duration
     }
   }
 
@@ -1132,6 +1138,16 @@ class App {
     }
     console.log({ token_balance, token_power, token_approval });
     is_checking_balance = false;
+  }
+
+  refresh(e, sort) {
+    e.preventDefault();
+    selected_sorting = sort;
+    this.currentIndex = null;
+    this.nextIndex = null;
+    this.posts = [];
+    this.getPosts();
+    this.closeStart(e);
   }
 
   renderPosts() {
@@ -1211,21 +1227,29 @@ class App {
       </div>
     </div>
     ` : null;
-    // todo: show sorter
     const start_pane = is_start_open ? html`
     <div class="panel start slide-in-right">
       <div class="panel-scroll">
         <p>
-          Welcome, <strong>${caller_principal? caller_principal.toText() : `Guest`}</strong><br><br>
-          ${caller_principal? html`<small>
-            Balance: <strong>${token_power > 0? normalizeNumber(token_balance / token_power) : '0'} ${token_symbol}</strong> 
-            &nbsp<button class="action-btn compact" ?disabled=${!(token_fee > 0 && token_balance > token_fee)}>Withdraw</button><br><br>
-            ${token_approval? html`Approval: ${token_power > 0? normalizeNumber(Number(token_approval.allowance) / token_power) : '0'} ${token_symbol} 
-            &nbsp<button class="action-btn compact" ?disabled=${!(token_fee > 0 && token_balance > token_fee && token_approval.allowance > 0)}>Revoke</button><br>
-            ${token_approval.allowance > 0? 
-              html`<small><i>${token_approval.expires_at.length > 0? `Expires ${timeUntil(new Date(Number(token_approval.expires_at[0]) / 1000000))}` : 'Forever'}</i></small>` : ''
-            }<br>` : ''} 
-          </small>` : ''}
+          <small>Welcome, <strong>${caller_principal? caller_principal.toText() : `Guest`}</strong></small><br><br>
+          <strong>Balance:</strong> ${caller_principal
+            ? html`<small>${token_power > 0? normalizeNumber(token_balance / token_power) : html`<span class="spinner"></span>`} ${token_symbol}</small> 
+          &nbsp<button class="action-btn compact" ?disabled=${!(token_fee > 0 && token_balance > token_fee)}>Withdraw</button>` 
+            : html`<button class="action-btn success compact" ?disabled=${this.isConnectingWallet} @click=${(e) => this.loginInternetIdentity(e)}>${this.isConnectingWallet
+          ? html`<span class="spinner"></span> Connecting...`
+          : html`Sign in to see this`}</button>`} <br><br>
+          <strong>Approval:</strong> ${caller_principal
+            ? html`<small>${token_approval && token_power > 0? normalizeNumber(Number(token_approval.allowance) / token_power) : html`<span class="spinner"></span>`} ${token_symbol}</small> 
+          &nbsp<button class="action-btn compact" ?disabled=${!(token_fee > 0 && token_balance > token_fee && token_approval.allowance > 0)}>Revoke</button><br>
+          ${token_approval?.allowance > 0? 
+            html`<small><small><i>${token_approval.expires_at.length > 0? `Expires ${timeUntil(new Date(Number(token_approval.expires_at[0]) / 1000000))}` : 'No expiry'}</i></small></small>` : ''
+          }`
+            : html`<button class="action-btn success compact" ?disabled=${this.isConnectingWallet} @click=${(e) => this.loginInternetIdentity(e)}>${this.isConnectingWallet
+          ? html`<span class="spinner"></span> Connecting...`
+          : html`Sign in to see this`}</button>`}<br><br>
+          <strong>Sort Threads by:</strong><br>
+          <button class="action-btn ${selected_sorting == 'new'? 'success' : ''} compact" @click=${(e) => this.refresh(e, 'new')}>Newest</button>&nbsp
+          <button class="action-btn ${selected_sorting == 'new'? '' : 'success'} compact" @click=${(e) => this.refresh(e, 'hot')}>Last Activity</button>
         </p>
       </div>
       <div class="action-bar sticky">

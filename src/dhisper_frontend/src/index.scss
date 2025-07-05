@@ -84,18 +84,18 @@ html, body {
 
 /* Slide out current */
 .slide-out-up {
-  animation: slideOutUp 0.5s ease forwards;
+  animation: slideOutUp 0.4s ease forwards;
 }
 .slide-out-down {
-  animation: slideOutDown 0.5s ease forwards;
+  animation: slideOutDown 0.4s ease forwards;
 }
 
 /* Slide in new */
 .slide-in-up {
-  animation: slideInUp 0.5s ease forwards;
+  animation: slideInUp 0.4s ease forwards;
 }
 .slide-in-down {
-  animation: slideInDown 0.5s ease forwards;
+  animation: slideInDown 0.4s ease forwards;
 }
 
 /* Keyframes: SAME direction, no opacity */
@@ -132,17 +132,17 @@ html, body {
   }
 }
 .slide-out-left {
-  animation: slideOutLeft 0.5s ease forwards;
+  animation: slideOutLeft 0.4s ease forwards;
 }
 .slide-out-right {
-  animation: slideOutRight 0.5s ease forwards;
+  animation: slideOutRight 0.4s ease forwards;
 }
 
 .slide-in-left {
-  animation: slideInLeft 0.5s ease forwards;
+  animation: slideInLeft 0.4s ease forwards;
 }
 .slide-in-right {
-  animation: slideInRight 0.5s ease forwards;
+  animation: slideInRight 0.4s ease forwards;
 }
 
 /* Keyframes: Horizontal movement */
@@ -184,14 +184,14 @@ html, body {
   to { opacity: 1; }
 }
 .fade-in {
-  animation: fadeIn 0.5s ease forwards;
+  animation: fadeIn 0.4s ease forwards;
 }
 @keyframes fadeOut {
   from { opacity: 1; }
   to { opacity: 0; }
 }
 .fade-out {
-  animation: fadeOut 0.5s ease forwards;
+  animation: fadeOut 0.4s ease forwards;
 }
 
 // para
@@ -293,11 +293,11 @@ p {
 }
 
 .popup.in {
-  animation: popup-slide-in 0.5s ease forwards;
+  animation: popup-slide-in 0.4s ease forwards;
 }
 
 .popup.out {
-  animation: popup-slide-out 0.5s ease forwards;
+  animation: popup-slide-out 0.4s ease forwards;
 }
 
 input[type=text] {
