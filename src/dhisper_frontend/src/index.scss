@@ -101,7 +101,7 @@ html, body {
 /* Keyframes: SAME direction, no opacity */
 @keyframes slideInUp {
   from {
-    transform: translateY(100%);
+    transform: translateY(150%);
   }
   to {
     transform: translateY(0%);
@@ -112,12 +112,12 @@ html, body {
     transform: translateY(0%);
   }
   to {
-    transform: translateY(-100%);
+    transform: translateY(-150%);
   }
 }
 @keyframes slideInDown {
   from {
-    transform: translateY(-100%);
+    transform: translateY(-150%);
   }
   to {
     transform: translateY(0%);
@@ -128,7 +128,7 @@ html, body {
     transform: translateY(0%);
   }
   to {
-    transform: translateY(100%);
+    transform: translateY(150%);
   }
 }
 .slide-out-left {
@@ -148,7 +148,7 @@ html, body {
 /* Keyframes: Horizontal movement */
 @keyframes slideInRight {
   from {
-    transform: translateX(-100%);
+    transform: translateX(-150%);
   }
   to {
     transform: translateX(0%);
@@ -159,12 +159,12 @@ html, body {
     transform: translateX(0%);
   }
   to {
-    transform: translateX(-100%);
+    transform: translateX(-150%);
   }
 }
 @keyframes slideInLeft {
   from {
-    transform: translateX(100%);
+    transform: translateX(150%);
   }
   to {
     transform: translateX(0%);
@@ -175,7 +175,7 @@ html, body {
     transform: translateX(0%);
   }
   to {
-    transform: translateX(100%);
+    transform: translateX(150%);
   }
 }
 
@@ -222,7 +222,9 @@ p {
 }
 
 .drawer.compose, 
-.drawer.delete-confirm {
+.drawer.delete-confirm,
+.drawer.withdraw,
+.drawer.revoke {
   z-index: 80;
 }
 
@@ -276,7 +278,7 @@ p {
 
 @keyframes popup-slide-in {
   0% {
-    transform: translate(-50%,150%)
+    transform: translate(-50%,200%)
   }
   to {
     transform: translate(-50%,-50%)
@@ -288,7 +290,7 @@ p {
     transform: translate(-50%,-50%)
   }
   to {
-    transform: translate(-50%,150%)
+    transform: translate(-50%,200%)
   }
 }
 
@@ -322,11 +324,6 @@ input[type=text]:focus {
   box-shadow: 0 0 20px #fff, inset 0 0 0 1px #000, inset 0 0 10px 1px #000;
 }
 
-.char-count {
-  font-size: .9rem;
-  color: rgb(255 255 255 / 90%);
-}
-
 .info {
   font-size: 0.9rem;
   color: #ffb;
@@ -344,7 +341,9 @@ input[type=text]:focus {
 }
 
 .backdraw.compose, 
-.backdraw.delete-confirm {
+.backdraw.delete-confirm,
+.backdraw.withdraw,
+.backdraw.revoke {
   z-index: 75;
 }
 

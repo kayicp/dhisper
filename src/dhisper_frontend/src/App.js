@@ -16,10 +16,10 @@ let caller_account_copied = false;
 let caller_account_copy_failed = false;
 
 /*
-todo: sorter (new/hot)
-todo: wallet pane to withdraw/(logout+revoke)
+todo: drawer to revoke
 todo: maybe free reply for max 16 chars & cant receive tips? redo canister metadata
 todo: make Post2 type to include tips/reports/moderations? remove hash too, not needed
+todo: start 2x3 keypad, each button will open their own pane (balance, approval, etc.) 
 todo: put thread details in comment panel
 todo: replace css animation with css transition
 todo: replace input with textarea
@@ -69,7 +69,7 @@ const sign_in_pitches = [
   { header: "Every word has an author.", body: "You wrote it. Now own it." },
   { header: "We've been expecting you.", body: "Join us to reach the rest." },
   { header: "You're posting on the New Internet.", body: "Be one of the pioneers." },
-  { header: "Built different?", body: "So is this place. Let's keep it going." },
+  { header: "Built different?", body: "So is this place. Let's get along." },
 ];
 
 const top_up_pitches = [
@@ -118,8 +118,13 @@ let is_waiting_approval = false;
 let is_approving = false;
 let is_delete_open = false;
 let is_deleting = false;
+let is_withdraw_open = false;
+let is_transferring = false;
+let is_revoke_open = false;
 let token_id = null;
 
+let withdraw_receiver = "";
+let withdraw_tips = "";
 let post_content = "";
 let char_count = 0;
 let selected_approval_plan = 'ten';
@@ -154,10 +159,27 @@ BigInt.prototype.toJSON = function () {
   return this.toString();
 };
 
-function shortPrincipal(p) {
+function shortPrincipal(p, show_middle = false) {
   let str = p.toText();
   let splitted = str.split('-');
-  return `${splitted[0]}-...-${splitted[splitted.length - 1]}`;
+  if (show_middle) {
+    return splitted.length <= 3? str : `${splitted[0]}-...-${splitted[Math.floor(splitted.length / 2)]}-...-${splitted[splitted.length - 1]}`;
+  } else return splitted.length <= 2? str : `${splitted[0]}-...-${splitted[splitted.length - 1]}`;
+}
+
+function shortAccount(hex) {
+  const first = hex.slice(0, 4);
+  const middle = hex.slice(30, 34); // center-ish
+  const last = hex.slice(-4);
+  return `${first}…${middle}…${last}`;
+}
+
+function hex64ToBytes32(hex64) {
+  const bytes = new Uint8Array(32);
+  for (let i = 0; i < 32; i++) {
+    bytes[i] = parseInt(hex64.slice(i * 2, i * 2 + 2), 16);
+  }
+  return { bytes, toUint8Array: () => Array.from(bytes) };
 }
 
 function normalizeNumber(num) {
@@ -182,6 +204,41 @@ function normalizeNumber(num) {
 
   // Not in scientific notation, return as string
   return num.toString();
+}
+
+function isValidDestination(str) {
+  const dest = str.trim().replace(' ', '');
+  withdraw_receiver = dest;
+  let p = null;
+  let a = null;
+  let tips = 'Destination is empty.';
+  let is_valid = false;
+  if (dest.length > 0) {
+    try {
+      p = Principal.fromText(dest);
+      if (p.isAnonymous()) {
+        tips = 'Invalid Principal: Anonymous';
+      } else if (p.compareTo(Principal.managementCanister()) == 'eq') {
+        tips = 'Invalid Principal: Management Canister';
+      } else {
+        a = AccountIdentifier.fromPrincipal({ principal: p }).toHex();
+        tips = `Principal detected (${shortPrincipal(p, true)}). Remember to double-check.`;
+        is_valid = true;
+      }
+    } catch (err1) {
+      console.error('Invalid Principal ID', err1);
+      p = null;
+      is_valid = /^[0-9a-fA-F]{64}$/.test(dest);
+      if (is_valid) {
+        a = dest; // hex64ToBytes32(dest);
+        tips = `Account ID detected (${shortAccount(dest)}). Remember to double-check.`;
+      } else {
+        a = null;
+        tips = 'Invalid destination format.';
+      }
+    }
+  }
+  return { p, a, tips, is_valid, dest }
 }
 
 /**
@@ -791,7 +848,7 @@ class App {
 
   errPopup(title, err) {
     for (const err_key in err) {
-      subtitle = JSON.stringify(err[err_key], null, 2);
+      const subtitle = JSON.stringify(err[err_key], null, 2);
       return this.showPopup(err_key, subtitle)
     }
     this.showPopup(title);
@@ -863,7 +920,23 @@ class App {
 
   async logoutInternetIdentity(e) {
     e.preventDefault();
-
+    this.isConnectingWallet = true;
+    this.renderPosts();
+    try {
+      await internet_identity.logout();
+      internet_identity = null;
+      caller_agent = null;
+      caller_principal = null;
+      caller_account = '';
+      
+      token_balance = 0;
+      token_power = 0;
+      token_approval = null;
+    } catch (err) {
+      this.catchPopup("Error while Signing Out", err);
+    }
+    this.isConnectingWallet = false;
+    this.renderPosts();
   }
 
   async loginInternetIdentity(e) {
@@ -936,15 +1009,7 @@ class App {
       });
       is_approving = false;
       if ('Err' in approve_res) {
-        const err_obj = approve_res.Err;
-        console.error('approve err', err_obj);
-        let title, subtitle;
-        for (const err_key in err_obj) {
-          title = err_key;
-          subtitle = JSON.stringify(err_obj[err_key]);
-          break;
-        }
-        this.showPopup(title, subtitle);
+        this.errPopup("Approve Error", approve_res.Err);
       } else this.closeApprovalWaiter(e, true);
       if (is_posting) {
         this.createNewPost(e);
@@ -1150,6 +1215,66 @@ class App {
     this.closeStart(e);
   }
 
+  openWithdraw(e) {
+    e.preventDefault();
+    is_withdraw_open = true;
+    this.renderPosts();
+  }
+
+  closeWithdraw(e) {
+    e.preventDefault();
+    if (is_transferring) return;
+    closeDrawer('withdraw', () => {
+      is_withdraw_open = false;
+      this.renderPosts();
+    });
+  }
+
+  async withdraw(e) {
+    e.preventDefault();
+    is_transferring = true;
+    this.renderPosts();
+    const addr = isValidDestination(withdraw_receiver);
+    const token_user = genToken(selected_create_fee_token_canister, { agent: caller_agent });
+    if (addr.p) {
+      try {
+        const transfer_res = await token_user.icrc1_transfer({
+          amount: BigInt(token_balance - token_fee),
+          from_subaccount: [],
+          to: { owner: addr.p, subaccount: [] },
+          fee: [token_fee],
+          created_at_time: [],
+          memo: [],
+        });
+        is_transferring = false;
+        if ('Err' in transfer_res) {
+          this.errPopup("Withdraw (via Principal) Error", transfer_res.Err);
+        } else this.closeWithdraw(e);
+      } catch (err) {
+        is_transferring = false;
+        this.catchPopup("Error while Withdrawing (via Principal)", err);
+      }
+    } else if (addr.a) {
+      try {
+        const transfer_block_id = await token_user.send_dfx({
+          to: addr.a,
+          fee: { e8s: token_fee },
+          memo: 0,
+          from_subaccount: [],
+          created_at_time: [],
+          amount: { e8s: token_balance - token_fee }
+        });
+        is_transferring = false;
+        console.log("Withdraw (via Account ID) OK", 'Block ID: ' + transfer_block_id);
+        this.closeWithdraw(e);
+      } catch (err) {
+        is_transferring = false;
+        this.catchPopup("Error while Withdrawing (via Account ID)", err);
+      }
+    } else this.showPopup("Invalid Withdrawal Destination", "Please provide a Principal or an Account ID.");
+    this.checkBalance();
+  }
+
   renderPosts() {
     if (this.isSliding) return;
     let current_post;
@@ -1233,13 +1358,13 @@ class App {
         <p>
           <small>Welcome, <strong>${caller_principal? caller_principal.toText() : `Guest`}</strong></small><br><br>
           <strong>Balance:</strong> ${caller_principal
-            ? html`<small>${token_power > 0? normalizeNumber(token_balance / token_power) : html`<span class="spinner"></span>`} ${token_symbol}</small> 
-          &nbsp<button class="action-btn compact" ?disabled=${!(token_fee > 0 && token_balance > token_fee)}>Withdraw</button>` 
+            ? html`<small>${!is_checking_balance || token_power > 0? normalizeNumber(token_balance / token_power) : html`<span class="spinner"></span>`} ${token_symbol}</small> 
+          &nbsp<button class="action-btn compact" ?disabled=${!(token_fee > 0 && token_balance > token_fee)} @click=${(e) => this.openWithdraw(e)}>Withdraw</button>` 
             : html`<button class="action-btn success compact" ?disabled=${this.isConnectingWallet} @click=${(e) => this.loginInternetIdentity(e)}>${this.isConnectingWallet
           ? html`<span class="spinner"></span> Connecting...`
           : html`Sign in to see this`}</button>`} <br><br>
           <strong>Approval:</strong> ${caller_principal
-            ? html`<small>${token_approval && token_power > 0? normalizeNumber(Number(token_approval.allowance) / token_power) : html`<span class="spinner"></span>`} ${token_symbol}</small> 
+            ? html`<small>${!is_checking_balance || (token_approval && token_power > 0)? normalizeNumber(Number(token_approval.allowance) / token_power) : html`<span class="spinner"></span>`} ${token_symbol}</small> 
           &nbsp<button class="action-btn compact" ?disabled=${!(token_fee > 0 && token_balance > token_fee && token_approval.allowance > 0)}>Revoke</button><br>
           ${token_approval?.allowance > 0? 
             html`<small><small><i>${token_approval.expires_at.length > 0? `Expires ${timeUntil(new Date(Number(token_approval.expires_at[0]) / 1000000))}` : 'No expiry'}</i></small></small>` : ''
@@ -1271,13 +1396,12 @@ class App {
           }</strong><br>
           <small><small>${is_comments_open? reply_input_pitch.body : thread_input_pitch.body}</small></small>
           <br><br>
-          <input id="post_input" type="text" ?disabled=${is_posting} placeholder="${is_comments_open? reply_input_pitch.placeholder : thread_input_pitch.placeholder}" @input=${(e) => this.updateCharCount(e)} 
-              .value=${post_content || ''}/>
-          <span class="char-count">${char_count}</span>
+          <input id="post_input" type="text" ?disabled=${is_posting} placeholder="${is_comments_open? reply_input_pitch.placeholder : thread_input_pitch.placeholder}" @input=${(e) => this.updateCharCount(e)} .value=${post_content || ''}/>
+          <small><small>${char_count}</small></small>
         </p>
         <div class="action-bar">
           <button class="action-btn" ?disabled=${is_posting} @click=${(e) => this.closeCompose(e)}>Close</button>
-          <button id="post_btn" class="action-btn success" ?disabled=${is_posting} @click=${(e) => {
+          <button id="post_btn" class="action-btn success" ?disabled=${is_posting || post_content.trim().length == 0} @click=${(e) => {
             post_payment_pitch = randomPitch(post_payment_pitches);
             sign_in_pitch = randomPitch(sign_in_pitches);
             top_up_pitch = randomPitch(top_up_pitches);
@@ -1302,7 +1426,32 @@ class App {
         <button class="action-btn failed" ?disabled=${is_deleting} @click=${(e) => this.deletePost(e)}>${is_deleting? html`<span class="spinner"></span> Deleting...` : html`Yes, Delete`}</button>
       </div>
     </div>` : null;
-    
+    let withdraw_form = null;
+    if (is_withdraw_open) {
+      const withdraw_validity = isValidDestination(withdraw_receiver);
+      withdraw_form = html`
+        <div class="backdraw withdraw fade-in" @click=${(e) => this.closeWithdraw(e)}>
+        </div>
+        <div class="drawer withdraw slide-in-up">
+          <p>
+            <strong>Withdrawing ${normalizeNumber(token_balance / token_power)} ${token_symbol}</strong><br>
+            <small><small>
+              - Withdrawal fee: ${normalizeNumber(token_fee / token_power)} ${token_symbol}<br>
+              = Receiver gets: <strong>${normalizeNumber((token_balance - token_fee) / token_power)} ${token_symbol}</strong>
+            </small></small><br><br>
+            <input id="withdraw_input" type="text" ?disabled=${is_posting} placeholder="Receiver's Principal or Account ID" @input=${(e) => {
+              withdraw_receiver = e.target.value;
+              this.renderPosts();
+            }} .value=${withdraw_receiver || ''}/>
+            <small><small>${withdraw_validity.tips}</small></small>
+          </p>
+          <div class="action-bar">
+            <button class="action-btn success" ?disabled=${is_transferring} @click=${(e) => this.closeWithdraw(e)}>Close</button>
+            <button class="action-btn" ?disabled=${is_transferring || !withdraw_validity.is_valid} @click=${(e) => this.withdraw(e)}>${is_transferring? html`<span class="spinner"></span> Withdrawing...` : html`Withdraw`}</button>
+          </div>
+        </div>`;
+    };
+
     const wallet_selectors = this.isSelectingWallet
       ? html`<div class="backdraw wallet fade-in" @click=${(e) => this.closeLogin(e)}></div>
       <div class="drawer wallet slide-in-up">
@@ -1517,7 +1666,8 @@ class App {
     ${start_pane}
     ${reply_action_pane}
     ${create_new_post_form}   
-    ${delete_confirm_form}     
+    ${delete_confirm_form} 
+    ${withdraw_form}    
     ${wallet_selectors}
     ${cost_and_reasons}
     ${token_balance_waiter}
