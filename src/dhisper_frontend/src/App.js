@@ -16,9 +16,14 @@ let caller_account_copied = false;
 let caller_account_copy_failed = false;
 
 /*
-todo: drawer to revoke
-todo: maybe free reply for max 16 chars & cant receive tips? redo canister metadata
+newplan:
+- anon free: reply only, 16 chars limit, 8 minutes cooldown, untippable, cannot delete other posts, wont bump thread
+- user free: same as anon free, but 64 chars limit, 2 minutes cooldown.
+- user paid: thread/reply, 256 chars limit, no cooldown, tippable, thread owner able to delete free posts (won't remove the owner detail), bumps thread, 
+
+todo: new payment plan - redo canister metadata
 todo: make Post2 type to include tips/reports/moderations? remove hash too, not needed
+todo: change gradient 
 todo: start 2x3 keypad, each button will open their own pane (balance, approval, etc.) 
 todo: put thread details in comment panel
 todo: replace css animation with css transition
@@ -977,10 +982,7 @@ class App {
       await prepareTokens();
       if (e != null && is_posting) {
         this.createNewPost(e);
-      } else {
-        await this.checkBalance();
-        this.renderPosts();
-      };
+      } else this.checkBalance();
     } catch (err) {
       const err_title = "Error after Authentication";
       if (e == null) this.catchPopup(err_title, err); else console.error(err_title, err);
@@ -1158,8 +1160,9 @@ class App {
     e.preventDefault();
     is_start_open = true;
     await prepareTokens();
-    if (caller_principal) await this.checkBalance();
-    this.renderPosts();
+    if (caller_principal) {
+      this.checkBalance()
+    } else this.renderPosts();
   }
 
   closeStart(e) {
@@ -1203,6 +1206,7 @@ class App {
     }
     console.log({ token_balance, token_power, token_approval });
     is_checking_balance = false;
+    this.renderPosts();
   }
 
   refresh(e, sort) {
@@ -1272,6 +1276,48 @@ class App {
         this.catchPopup("Error while Withdrawing (via Account ID)", err);
       }
     } else this.showPopup("Invalid Withdrawal Destination", "Please provide a Principal or an Account ID.");
+    this.checkBalance();
+  }
+
+  openRevoke(e) {
+    e.preventDefault();
+    is_revoke_open = true;
+    this.renderPosts();
+  }
+
+  closeRevoke(e) {
+    e.preventDefault();
+    if (is_approving) return;
+    closeDrawer('revoke', () => {
+      is_revoke_open = false;
+      this.renderPosts();
+    })
+  };
+
+  async revoke(e) {
+    e.preventDefault();
+    is_approving = true;
+    this.renderPosts();
+    try {
+      const token_user = genToken(selected_create_fee_token_canister, { agent: caller_agent });
+      const revoke_res = await token_user.icrc2_approve({
+        from_subaccount: [],
+        amount: 0,
+        spender : { owner : Principal.fromText(dhisper_id), subaccount : [] },
+        expected_allowance: [],
+        expires_at: [],
+        fee: [token_fee],
+        memo: [],
+        created_at_time: [],
+      });
+      is_approving = false;
+      if ('Err' in revoke_res) {
+        this.errPopup("Revoke Error", revoke_res.Err);
+      } else this.closeRevoke(e);
+    } catch (err) {
+      is_approving = false;
+      this.catchPopup("Error while Revoking", err);
+    }
     this.checkBalance();
   }
 
@@ -1365,7 +1411,7 @@ class App {
           : html`Sign in to see this`}</button>`} <br><br>
           <strong>Approval:</strong> ${caller_principal
             ? html`<small>${!is_checking_balance || (token_approval && token_power > 0)? normalizeNumber(Number(token_approval.allowance) / token_power) : html`<span class="spinner"></span>`} ${token_symbol}</small> 
-          &nbsp<button class="action-btn compact" ?disabled=${!(token_fee > 0 && token_balance > token_fee && token_approval.allowance > 0)}>Revoke</button><br>
+          &nbsp<button class="action-btn compact" ?disabled=${!(token_fee > 0 && token_balance > token_fee && token_approval.allowance > 0)} @click=${(e) => this.openRevoke(e)}>Revoke</button><br>
           ${token_approval?.allowance > 0? 
             html`<small><small><i>${token_approval.expires_at.length > 0? `Expires ${timeUntil(new Date(Number(token_approval.expires_at[0]) / 1000000))}` : 'No expiry'}</i></small></small>` : ''
           }`
@@ -1451,6 +1497,22 @@ class App {
           </div>
         </div>`;
     };
+
+    const revoke_form = is_revoke_open ? html`
+    <div class="backdraw revoke fade-in" @click=${(e) => this.closeRevoke(e)}>
+    </div>
+    <div class="drawer revoke slide-in-up">
+      <p>
+        <strong>Revoke Confirmation</strong><br>
+        <small><small>This will disable auto-deduction on your balance on paid operations by the app. You will have to approve the app again the next time you want to perform paid operations. Continue?<br><br>
+        Revocation fee: ${normalizeNumber(token_fee / token_power)} ${token_symbol}<br>
+        Balance after revoking: ${normalizeNumber((token_balance - token_fee) / token_power)} ${token_symbol}</small></small>
+      </p>
+      <div class="action-bar">
+        <button class="action-btn success" ?disabled=${is_approving} @click=${(e) => this.closeRevoke(e)}>No</button>
+        <button class="action-btn failed" ?disabled=${is_approving} @click=${(e) => this.revoke(e)}>${is_approving? html`<span class="spinner"></span>Revoking...` : html`Yes, Revoke`}</button>
+      </div>
+    </div>` : null;
 
     const wallet_selectors = this.isSelectingWallet
       ? html`<div class="backdraw wallet fade-in" @click=${(e) => this.closeLogin(e)}></div>
@@ -1667,7 +1729,8 @@ class App {
     ${reply_action_pane}
     ${create_new_post_form}   
     ${delete_confirm_form} 
-    ${withdraw_form}    
+    ${withdraw_form}
+    ${revoke_form}
     ${wallet_selectors}
     ${cost_and_reasons}
     ${token_balance_waiter}
