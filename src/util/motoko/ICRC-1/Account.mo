@@ -42,7 +42,7 @@ module {
 		subaccount = null;
 	};
 
-	public func validate(pair : Pair) : Bool = if (Principal.isAnonymous(pair.owner) or Principal.toBlob(pair.owner).size() > 29) false else validateSubaccount(pair.subaccount);
+	public func validate(pair : Pair) : Bool = if (Principal.isAnonymous(pair.owner) or Principal.equal(pair.owner, Management.principal()) or Principal.toBlob(pair.owner).size() > 29) false else validateSubaccount(pair.subaccount);
 
 	public func validateSubaccount(blob : ?Blob) : Bool = switch (blob) {
 		case (?bytes) bytes.size() == 32;

@@ -19,10 +19,11 @@ let caller_account_copy_failed = false;
 newplan:
 - anon free: reply only, 16 chars limit, 8 minutes cooldown, untippable, cannot delete other posts, wont bump thread
 - user free: same as anon free, but 64 chars limit, 2 minutes cooldown.
-- user paid: thread/reply, 256 chars limit, no cooldown, tippable, thread owner able to delete free posts (won't remove the owner detail), bumps thread, 
+- user paid: thread/reply, 256 chars limit, no cooldown, tippable, thread owner able to delete free posts (won't remove the owner detail), bumps thread
 
-todo: new payment plan - redo canister metadata
-todo: make Post2 type to include tips/reports/moderations? remove hash too, not needed
+todo: new payment plan - redo canister metadata (sort the key)
+todo: add Free button
+todo: add cooldown timer
 todo: change gradient 
 todo: start 2x3 keypad, each button will open their own pane (balance, approval, etc.) 
 todo: put thread details in comment panel

@@ -31,82 +31,7 @@ module {
 	public let MAX_TAKE = "kay4:max_take_value";
 	public let MAX_QUERY_BATCH = "kay4:max_query_batch_size";
 
-	public type Init = {
-		max_threads_size : ?Nat;
-		max_replies_size : ?Nat;
-		max_content_size : ?Nat;
-
-		fee_collectors : [Principal];
-		// todo: redesign fee_rates
-		create_fee_rates : [{
-			// todo: rename to create_authorization_types
-			standard : Text; // todo: bring standard under token
-			assets : [{
-				canister_id : Principal;
-				minimum_amount : ?Nat;
-				additional : ?{ amount_numerator : Nat; byte_denominator : Nat };
-			}];
-		}];
-		delete_fee_rates : [{
-			standard : Text;
-			assets : [{
-				canister_id : Principal;
-				minimum_amount : ?Nat;
-			}];
-		}];
-
-		default_take_value : ?Nat;
-		max_take_value : ?Nat;
-		max_query_batch_size : ?Nat;
-	};
-
-	public func init(metadata : Value.Metadata, i : Init) : Value.Metadata {
-		var m = metadata;
-		m := Value.setNat(m, MAX_THREADS, i.max_threads_size);
-		m := Value.setNat(m, MAX_REPLIES, i.max_replies_size);
-		m := Value.setNat(m, MAX_CONTENT, i.max_content_size);
-
-		let fee_collectors = Buffer.Buffer<Value.Type>(i.fee_collectors.size());
-		for (p in i.fee_collectors.vals()) fee_collectors.add(#Principal p);
-		m := Value.setArray(m, FEE_COLLECTORS, Buffer.toArray(fee_collectors));
-
-		var create_fee_rates_standards : Value.Metadata = RBTree.empty();
-		for (fee_rate in i.create_fee_rates.vals()) {
-			var token_map = RBTree.empty<Value.Type, Value.Type>();
-			for (token in fee_rate.assets.vals()) {
-				var fee_map : Value.Metadata = RBTree.empty();
-				fee_map := Value.setNat(fee_map, MIN_AMOUNT, token.minimum_amount);
-				switch (token.additional) {
-					case (?defined) {
-						fee_map := Value.setNat(fee_map, ADDITIONAL_AMOUNT, ?defined.amount_numerator);
-						fee_map := Value.setNat(fee_map, ADDITIONAL_BYTE, ?defined.byte_denominator);
-					};
-					case _ ();
-				};
-				token_map := RBTree.insert(token_map, Value.compare, #Principal(token.canister_id), #Map(RBTree.array(fee_map)));
-			};
-			create_fee_rates_standards := Value.setValueMap(create_fee_rates_standards, fee_rate.standard, token_map);
-		};
-		m := Value.setMap(m, CREATE_FEE_RATES, create_fee_rates_standards);
-
-		var delete_fee_rates_standards : Value.Metadata = RBTree.empty();
-		for (fee_rate in i.delete_fee_rates.vals()) {
-			var token_map = RBTree.empty<Value.Type, Value.Type>();
-			for (token in fee_rate.assets.vals()) {
-				var fee_map : Value.Metadata = RBTree.empty();
-				fee_map := Value.setNat(fee_map, MIN_AMOUNT, token.minimum_amount);
-				token_map := RBTree.insert(token_map, Value.compare, #Principal(token.canister_id), #Map(RBTree.array(fee_map)));
-			};
-			delete_fee_rates_standards := Value.setValueMap(delete_fee_rates_standards, fee_rate.standard, token_map);
-		};
-		m := Value.setMap(m, DELETE_FEE_RATES, delete_fee_rates_standards);
-
-		m := Value.setNat(m, DEFAULT_TAKE, i.default_take_value);
-		m := Value.setNat(m, MAX_TAKE, i.max_take_value);
-		m := Value.setNat(m, MAX_QUERY_BATCH, i.max_query_batch_size);
-
-		m;
-	};
+	public let AUTHORIZATIONS = "kay4:authorizations";
 
 	public let LOCKER = "kay4:locker";
 
@@ -124,6 +49,24 @@ module {
 		metadata_versions : RBTree.RBTree<Nat, Value.Metadata>;
 		hash : Blob;
 	};
+	type Must2 = {
+		authorization : Kay2.Authorized;
+		timestamp : Nat64;
+		// phash : ?Blob; remove
+	};
+	public type Post2 = {
+		thread : ?Nat;
+		versions : RBTree.RBTree<Nat, Must2>;
+		content_versions : RBTree.RBTree<Nat, Text>;
+		files_versions : RBTree.RBTree<Nat, RBTree.RBTree<Text, ()>>;
+		owners_versions : RBTree.RBTree<Nat, RBTree.RBTree<Kay2.Identity, ()>>;
+		metadata_versions : RBTree.RBTree<Nat, Value.Metadata>;
+		// hash removed, then added below
+		tips : RBTree.RBTree<Nat, ()>;
+		report : ?Nat;
+	};
+	public type Posts2 = RBTree.RBTree<Nat, Post2>;
+
 	public type CreatePostArg = {
 		thread : ?Nat;
 		content : Text;
@@ -137,6 +80,7 @@ module {
 		#GenericError : Error.Type;
 		#ContentTooLarge : { current_size : Nat; maximum_size : Nat };
 		#UnknownThread;
+		#TemporarilyUnavailable : { current_time : Nat64; available_time : Nat64 };
 		#DuplicateFileName : { index : Nat };
 		#UnsupportedFileType : { index : Nat; supported_file_types : [Text] };
 		#FilesTooMany : { maximum_files_per_batch : Nat };
@@ -190,131 +134,32 @@ module {
 		);
 	};
 	public func createPost({
-		thread : ?Nat;
-		content : Text;
+		thread_id_opt : ?Nat;
 		authorization : Kay2.Authorized;
-
 		timestamp : Nat64;
+		content : Text;
 		owner : Kay2.Identity;
-	}) : Post {
-		var hashes = RBTree.empty<Blob, Blob>();
-		func register(k : Text, v : Value.Type) {
-			let keyHash = Hasher.sha256([Text.encodeUtf8(k).vals()].vals());
-			let valueHash = Value.hash(v);
-			hashes := RBTree.insert(hashes, Blob.compare, keyHash, valueHash);
-		};
-		switch thread {
-			case (?defined) register("thread", #Nat defined);
-			case _ ();
-		};
-		var new_post : Post = {
-			thread;
-			versions = RBTree.empty();
-			content_versions = RBTree.empty();
-			files_versions = RBTree.empty();
-			owners_versions = RBTree.empty();
-			metadata_versions = RBTree.empty();
-			hash = "" : Blob;
-		};
-		let must : Must = { authorization; timestamp; phash = null };
-		new_post := newMust(new_post, must, func(b : Blob) = register("versions", #Blob b));
-
-		new_post := newContent(new_post, content, func(b : Blob) = register("content_versions", #Blob b));
-
-		// todo: later
-		// new_post := newFiles(new_post, RBTree.empty(), func(b: Blob) = register("files_versions", #Blob b));
-
-		new_post := newOwners(new_post, RBTree.insert(RBTree.empty(), Kay2.compareIdentity, owner, ()), func(b : Blob) = register("owners_versions", #Blob b));
-
-		// todo: later
-		// new_post := newMetadata(new_post, RBTree.empty(), func(b: Blob) = register("metadata_versions", #Blob b));
-
-		{ new_post with hash = Hasher.sha256blobMap(RBTree.entries(hashes)) };
-	};
-	func newMust(p : Post, must : Must, hashed : Blob -> ()) : Post {
-		var hashes = RBTree.empty<Blob, Blob>();
-		func register(k : Text, v : Value.Type) {
-			let keyHash = Hasher.sha256([Text.encodeUtf8(k).vals()].vals());
-			let valueHash = Value.hash(v);
-			hashes := RBTree.insert(hashes, Blob.compare, keyHash, valueHash);
-		};
-		register("authorization", #Blob(Kay2.hashAuth(must.authorization)));
-		register("timestamp", #Nat(Nat64.toNat(must.timestamp)));
-		switch (must.phash) {
-			case (?found) register("phash", #Blob found);
-			case _ ();
-		};
-		hashed(Hasher.sha256blobMap(RBTree.entries(hashes)));
+	}) : Post2 {
 		{
-			p with versions = RBTree.insert(p.versions, Nat.compare, RBTree.size(p.versions) + 1, must)
+			thread = thread_id_opt;
+			versions = RBTree.insert(RBTree.empty(), Nat.compare, 0, { authorization; timestamp });
+			content_versions = RBTree.insert(RBTree.empty(), Nat.compare, 0, content);
+			files_versions = RBTree.insert(RBTree.empty(), Nat.compare, 0, RBTree.empty());
+			owners_versions = RBTree.insert(RBTree.empty(), Nat.compare, 0, RBTree.insert(RBTree.empty(), Kay2.compareIdentity, owner, ()));
+			metadata_versions = RBTree.insert(RBTree.empty(), Nat.compare, 0, RBTree.empty());
+			tips = RBTree.empty();
+			report = null;
 		};
 	};
-	func newContent(p : Post, content : Text, hashed : Blob -> ()) : Post {
-		var hashes = RBTree.empty<Blob, Blob>();
-		func register(k : Text, v : Value.Type) {
-			let keyHash = Hasher.sha256([Text.encodeUtf8(k).vals()].vals());
-			let valueHash = Value.hash(v);
-			hashes := RBTree.insert(hashes, Blob.compare, keyHash, valueHash);
-		};
-		register("content", #Text content);
-		hashed(Hasher.sha256blobMap(RBTree.entries(hashes)));
-		{
-			p with content_versions = RBTree.insert(p.content_versions, Nat.compare, RBTree.size(p.versions), content)
-		};
-	};
-	func newOwners(p : Post, owners : RBTree.RBTree<Kay2.Identity, ()>, hashed : Blob -> ()) : Post {
-		var hashes = RBTree.empty<Blob, Blob>();
-		func register(k : Text, v : Value.Type) {
-			let keyHash = Hasher.sha256([Text.encodeUtf8(k).vals()].vals());
-			let valueHash = Value.hash(v);
-			hashes := RBTree.insert(hashes, Blob.compare, keyHash, valueHash);
-		};
-		let buff = Buffer.Buffer<Value.Type>(RBTree.size(owners));
-		for ((owner, _) in RBTree.entries(owners)) {
-			buff.add(#Blob(Kay2.hashIdentity(owner)));
-		};
-		register("owners", #Array(Buffer.toArray(buff)));
-		hashed(Hasher.sha256blobMap(RBTree.entries(hashes)));
-		{
-			p with owners_versions = RBTree.insert(p.owners_versions, Nat.compare, RBTree.size(p.versions), owners)
-		};
-	};
-	// func newMetadata(p : Post, meta : Value.Metadata, hashed : Blob -> ()) : Post {
-	//   var hashes = RBTree.empty<Blob, Blob>();
-	//   func register(k : Text, v : Value.Type) {
-	//     let keyHash = Hasher.sha256([Text.encodeUtf8(k).vals()].vals());
-	//     let valueHash = Value.hash(v);
-	//     hashes := RBTree.insert(hashes, Blob.compare, keyHash, valueHash);
-	//   };
-	//   register("metadata", #Map(RBTree.array(meta)));
-	//   hashed(Hasher.sha256blobMap(RBTree.entries(hashes)));
-	//   {
-	//     p with metadata_versions = RBTree.insert(p.metadata_versions, Nat.compare, RBTree.size(p.versions), meta)
-	//   };
-	// };
-	// todo: on postupgrade, empty the hash, dont register the hashes
-	// todo: for dhisper, delete will replace all versions so there's only one version
 
-	public func deletePost(
-		_p : Post,
+	public func deletePost(p : Post2, must2 : Must2) : Post2 {
+		let new_v = RBTree.size(p.versions);
 		{
-			authorization : Kay2.Authorized;
-			timestamp : Nat64;
-		},
-	) : Post {
-		var hashes = RBTree.empty<Blob, Blob>();
-		func register(k : Text, v : Value.Type) {
-			let keyHash = Hasher.sha256([Text.encodeUtf8(k).vals()].vals());
-			let valueHash = Value.hash(v);
-			hashes := RBTree.insert(hashes, Blob.compare, keyHash, valueHash);
+			p with
+			versions = RBTree.insert(p.versions, Nat.compare, new_v, must2);
+			content_versions = RBTree.insert(p.content_versions, Nat.compare, new_v, "");
+			owners_versions = RBTree.insert(p.owners_versions, Nat.compare, new_v, RBTree.empty());
 		};
-		var p = _p;
-		let must : Must = { authorization; timestamp; phash = ?p.hash };
-		p := newMust(p, must, func(b) = register("versions", #Blob b));
-		p := newContent(p, "", func(b) = register("content_versions", #Blob b));
-		p := newOwners(p, RBTree.empty(), func(b) = register("owners_versions", #Blob b));
-		// todo later: files n metadata
-		{ p with hash = Hasher.sha256blobMap(RBTree.entries(hashes)) };
 	};
 
 	// track not used because because we only wanna know the last value
@@ -322,7 +167,7 @@ module {
 		case (?v) ?v.authorization;
 		case _ null;
 	};
-	public func getAuthorization(p : Post) : ?Kay2.Authorized {
+	public func getAuthorization(p : Post2) : ?Kay2.Authorized {
 		for ((_, latest) in RBTree.entriesReverse(p.versions)) return ?latest.authorization;
 		null;
 	};
@@ -331,7 +176,7 @@ module {
 		case (?v) ?v.timestamp;
 		case _ null;
 	};
-	public func getTimestamp(p : Post) : ?Nat64 {
+	public func getTimestamp(p : Post2) : ?Nat64 {
 		for ((_, latest) in RBTree.entriesReverse(p.versions)) return ?latest.timestamp;
 		null;
 	};
@@ -345,7 +190,7 @@ module {
 		null;
 	};
 
-	public func getContent(p : Post) : ?Text {
+	public func getContent(p : Post2) : ?Text {
 		for ((_, latest) in RBTree.entriesReverse(p.content_versions)) return ?latest;
 		null;
 	};
@@ -374,7 +219,7 @@ module {
 		RBTree.pageKey(v, Text.compare, prev, _take);
 	};
 
-	public func pageOwners(p : Post, prev : ?Kay2.Identity, take : ?Nat, meta : Value.Metadata) : [Kay2.Identity] {
+	public func pageOwners(p : Post2, prev : ?Kay2.Identity, take : ?Nat, meta : Value.Metadata) : [Kay2.Identity] {
 		for ((_, v) in RBTree.entriesReverse(p.owners_versions)) {
 			let _take = Pager.cleanTake(take, Value.metaNat(meta, MAX_TAKE), Value.metaNat(meta, DEFAULT_TAKE), RBTree.size(v));
 			return RBTree.pageKey(v, Kay2.compareIdentity, prev, _take);
@@ -415,9 +260,9 @@ module {
 	public type Posts = RBTree.RBTree<Nat, Post>;
 	public func batchPostId<T>(
 		post_ids : [Nat],
-		posts : Posts,
+		posts : Posts2,
 		meta : Value.Metadata,
-		f : Post -> ?T,
+		f : Post2 -> ?T,
 	) : [?T] {
 		let max_limit = Value.metaNat(meta, MAX_QUERY_BATCH);
 		let batcher = Batcher.buffer<?T>(post_ids.size(), max_limit);
@@ -454,14 +299,16 @@ module {
 		batcher.finalize();
 	};
 
-	public func getOwners(p : Post) : RBTree.RBTree<Kay2.Identity, ()> {
+	public func getOwners(p : Post2) : RBTree.RBTree<Kay2.Identity, ()> {
 		for ((_, version) in RBTree.entriesReverse(p.owners_versions)) return version;
 		RBTree.empty();
 	};
 
 	public type Threads = RBTree.RBTree<Nat, RBTree.RBTree<Nat, ()>>;
-	public func getMetrics(metrics : Value.Metadata, threads : Threads, posts : Posts) : Value.Metadata {
-		let m = Value.insert(metrics, "kay4:threads_size", #Nat(RBTree.size(threads)));
-		Value.insert(m, "kay4:posts_size", #Nat(RBTree.size(posts)));
+	public func getMetrics(metrics : Value.Metadata, threads : Threads, posts : Posts, posts2 : Posts2) : Value.Metadata {
+		var m = Value.insert(metrics, "kay4:threads_size", #Nat(RBTree.size(threads)));
+		m := Value.insert(m, "kay4:old_posts_size", #Nat(RBTree.size(posts)));
+		m := Value.insert(m, "kay4:posts_size", #Nat(RBTree.size(posts2)));
+		m;
 	};
 };
