@@ -61,7 +61,6 @@ html, body {
   transition: background .5s ease
 }
 
-
 .text, .subtext {
   color: #fff;
   text-shadow: 0 0 15px rgba(0,0,0),0 0 10px rgba(0,0,0,.75),0 0 5px rgba(0,0,0,.5);
@@ -69,6 +68,8 @@ html, body {
   font-size: 1.75rem;
   text-align: center;
   font-weight: bold;
+  word-break: break-word;
+  overflow-wrap: anywhere;
 }
 
 .subtext {
@@ -267,7 +268,7 @@ p {
   color: #fff;
   text-shadow: 0 0 15px rgb(0,0,0),0 0 10px rgba(0,0,0,.75),0 0 5px rgba(0,0,0,.5);
   padding: 10px;
-  width: fit-content;
+  min-width: 75vw;
   display: flex;
   flex-direction: column;
   justify-content: flex-start;
@@ -449,7 +450,9 @@ input[type=text]:focus {
 }
 .content {
   font-size: 1.1rem;
-  color: #fff
+  color: #fff;
+  word-break: break-word;
+  overflow-wrap: anywhere;
 }
 
 .info-label {

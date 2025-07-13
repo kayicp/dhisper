@@ -17,10 +17,15 @@ let caller_account_copy_failed = false;
 
 /*
 todo: add Remove button
+todo: dont show deleted thread
 todo: provide clarity for post errors
 todo: use kay4_auth_of to label PAID or FREE
-todo: fix token details msg n submsg
+todo: label "REMOVED BY THREAD OWNER"
+todo: label "REMOVED BY CANISTER OWNER"
+todo: url pathways
+todo: fix token details msg n submsg for reply based on current thread's auth
 todo: add cooldown timer
+
 todo: change gradient 
 todo: start 2x3 keypad, each button will open their own pane (balance, approval, etc.) 
 todo: put thread details in comment panel
@@ -45,7 +50,6 @@ todo: snap scroll
 
 const post_payment_pitches = [
   html`Value your words.`,
-  html`Bots post for free. We don't.`,
   html`Reach everyone. No followers needed.`,
   html`Claim your space.`,
   html`Cut the noise. Keep the signal.`,
@@ -67,11 +71,10 @@ const reply_input_pitches = [
 const sign_in_pitches = [
   { header: "AI is flooding the Internet.", body: "You found the high ground. You found us." },
   { header: "Algorithms ruined the Internet.", body: "Here, your words reach everyone, not the void." },
-  { header: "Welcome to the New Internet.", body: "No vanity. No followers. Just posts." },
-  { header: "Dead Internet Theory is no longer a theory.", body: "Let's keep this new one alive." },
+  { header: "Welcome to the New Internet.", body: "No vanity. No followers. Just people's thoughts." },
   { header: "Every word has an author.", body: "You wrote it. Now own it." },
-  { header: "We've been expecting you.", body: "Join us to reach the rest." },
-  { header: "You're posting on the New Internet.", body: "Be one of the pioneers." },
+  { header: "We've been expecting you.", body: "Join us to reach everyone." },
+  { header: "Welcome to the New Internet.", body: "Join the rest of the pioneers." },
   { header: "Built different?", body: "So is this place. Let's get along." },
 ];
 
@@ -726,9 +729,9 @@ class App {
       const total_cost = require_approval? post_cost + token_fee : post_cost;
       token_total = { amount: total_cost, msg: `Total posting fee: ${normalizeNumber(Number(total_cost) / token_power)} ${token_symbol}` };
       token_details = [
-        { amount: base_cost, msg: `Posting fee: ${normalizeNumber(Number(base_cost) / token_power)} ${token_symbol}`, submsg: `skip cooldowns, helps keep Dhisper spam-free and ad-free for you`},
-        { amount: token_fee, msg: `Payment fee: ${normalizeNumber(Number(token_fee) / token_power)} ${token_symbol}`, submsg: `covers the small cost of transferring your token`},
-        { amount: require_approval ? token_fee : BigInt(0), msg: `Payment Approval fee: ${normalizeNumber(Number(token_fee) / token_power)} ${token_symbol}`, submsg: `allows Dhisper to deduct the posting fee automatically for you`},
+        { amount: base_cost, msg: `${is_comments_open? 'Replying' : 'New Thread'} fee: ${normalizeNumber(Number(base_cost) / token_power)} ${token_symbol}`, submsg: html`• Post <strong>instantly</strong> - no cooldown or competition<br>• Write a <strong>longer</strong> ${is_comments_open? 'reply' : 'thread opener'} - ${fee_create.character_limit} characters or more${is_comments_open? html`<br>• <strong>Boost visibility</strong> of the thread (if it's paid too) - bump it to the top of the feed<br>• <strong>Stay protected</strong> from deletion by the thread owner` : html`<br>• <strong>Gain visibility</strong> with automatic bumps from paid replies<br>• <strong>Moderate</strong> free replies in your thread`}` },
+        { amount: token_fee, msg: `Payment fee: ${normalizeNumber(Number(token_fee) / token_power)} ${token_symbol}`, submsg: `Covers the small cost of transferring your token`},
+        { amount: require_approval ? token_fee : BigInt(0), msg: `Payment Approval fee: ${normalizeNumber(Number(token_fee) / token_power)} ${token_symbol}`, submsg: `Allows Dhisper to deduct the posting fee automatically for you`},
         { amount: extra_cost, msg: `Extra characters fee: ${normalizeNumber(Number(extra_cost) / token_power)} ${token_symbol}`, submsg: `You exceed ${fee_create.character_limit} characters; either trim it, or pay a little extra` },
       ];
       if (!is_seeing_cost) {
@@ -1516,6 +1519,7 @@ class App {
   //       </button>
   //   </div>
   // `;
+    const free_char_limit = auth_none? is_comments_open? auth_none.create.reply_character_limit : auth_none.create.thread_character_limit : 0;
     const cost_and_reasons = is_seeing_cost
       ? html`<div class="backdraw cost fade-in" @click=${(e) => this.closePayment(e)}></div>
       <div class="drawer cost slide-in-up">
@@ -1523,15 +1527,15 @@ class App {
           <strong>${token_total.msg}</strong>&nbsp
           <button class="action-btn compact" @click=${(e) => this.viewTokenDetails(e)}>Show fee details</button>
           <br><br>
-          <small>${post_payment_pitch}</small>
+          <small>${post_payment_pitch}${post_content.length > free_char_limit? html`<small><br><br><i>To ${is_comments_open? "reply" : "make a new thread"} for free, trim your post to <strong>${free_char_limit} characters</strong> or less.</i></small>` : null}</small>
         </p>
         <div class="action-bar">
           <button class="action-btn" ?disabled=${is_paying || is_trying} @click=${(e) => this.closePayment(e)}>Close</button>
-          <button class="action-btn" ?disabled=${is_paying || is_trying} @click=${(e) => {
+          <button class="action-btn" ?disabled=${is_paying || is_trying || post_content.length > free_char_limit} @click=${(e) => {
             is_trying = true;
             is_paying = false;
             this.createNewPost(e);
-          }}>${is_trying ? html`<span class="spinner"></span> Trying...` : html`Try Free`}</button>
+          }}>${is_trying ? html`<span class="spinner"></span> Trying...` : html`Free`}</button>
           <button class="action-btn success" ?disabled=${is_paying || is_trying} @click=${(e) => {
             is_paying = true;
             is_trying = false;

@@ -70,33 +70,6 @@ dfx deploy dhisper_backend --no-wallet --argument "(
         default_take_value = opt (100 : nat);
         max_take_value = opt (200 : nat);
       };
-      kay4 = record {
-        fee_collectors = vec {
-          principal \"$DEFAULT_PRINCIPAL\";
-        };
-        delete_fee_rates = vec {};
-        default_take_value = opt (100 : nat);
-        max_threads_size = opt (300 : nat);
-        max_replies_size = opt (300 : nat);
-        create_fee_rates = vec {
-          record {
-            assets = vec {
-              record {
-                canister_id = principal \"$TOKEN_ID\";
-                minimum_amount = opt (100_000 : nat);
-                additional = opt record {
-                  byte_denominator = 1 : nat;
-                  amount_numerator = 1 : nat;
-                };
-              };
-            };
-            standard = \"ICRC-2\";
-          };
-        };
-        max_take_value = opt (200 : nat);
-        max_query_batch_size = opt (100 : nat);
-        max_content_size = opt (256 : nat);
-      };
     }
   },
 )"

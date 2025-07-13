@@ -362,8 +362,10 @@ shared (install) actor class Canister(
 
         let amount_numer = Value.getNat(create_auth, key_prefix # "_additional_amount_numerator", 0);
         let char_denom = Value.getNat(create_auth, key_prefix # "_additional_character_denominator", 0);
-        let additional_amount = if (amount_numer > 0 and char_denom > 0 and content_size > character_limit) {
-          (content_size - character_limit) * amount_numer / char_denom;
+        let additional_amount = if (content_size > character_limit) {
+          if (amount_numer > 0 and char_denom > 0) {
+            (content_size - character_limit) * amount_numer / char_denom;
+          } else return #Err(#ContentTooLarge { current_size = content_size; maximum_size = character_limit });
         } else 0;
 
         let expected_fee = minimum_amount + additional_amount;
