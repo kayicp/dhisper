@@ -16,13 +16,10 @@ let caller_account_copied = false;
 let caller_account_copy_failed = false;
 
 /*
-newplan:
-- anon free: reply only, 16 chars limit, 8 minutes cooldown, untippable, cannot delete other posts, wont bump thread
-- user free: same as anon free, but 64 chars limit, 2 minutes cooldown.
-- user paid: thread/reply, 256 chars limit, no cooldown, tippable, thread owner able to delete free posts (won't remove the owner detail), bumps thread
-
-todo: new payment plan - redo canister metadata (sort the key)
-todo: add Free button
+todo: add Remove button
+todo: provide clarity for post errors
+todo: use kay4_auth_of to label PAID or FREE
+todo: fix token details msg n submsg
 todo: add cooldown timer
 todo: change gradient 
 todo: start 2x3 keypad, each button will open their own pane (balance, approval, etc.) 
@@ -102,15 +99,10 @@ let approval_pitch = randomPitch(approval_pitches);
 let is_composing_post = false;
 let is_seeing_cost = false;
 let is_paying = false;
+let is_trying = false;
 
-let create_fee_rates = null;
-let selected_create_fee_token_standard = null;
-let selected_create_fee_token_canister = null;
-let selected_create_fee_rate = null;
-let delete_fee_rates = null;
-let selected_delete_fee_standard = null;
-let selected_delete_token_canister = null;
-let selected_delete_fee_rate = null;
+let auth_none = null;
+let auth_icrc2 = null;
 
 let selected_sorting = 'new';
 let is_start_open = false;
@@ -127,7 +119,6 @@ let is_deleting = false;
 let is_withdraw_open = false;
 let is_transferring = false;
 let is_revoke_open = false;
-let token_id = null;
 
 let withdraw_receiver = "";
 let withdraw_tips = "";
@@ -149,7 +140,6 @@ let token_approval_total = null;
 
 let post_cost = 0;
 let base_cost = 0;
-let max_content_size = 256;
 let extra_chars = 0;
 let extra_cost = 0;
 
@@ -418,51 +408,23 @@ function timeUntil(futureDate) {
   return rtf.format(diffInYears, 'year');
 }
 
-async function prepareTokens() {
-  if (
-    create_fee_rates == null
-    // || delete_fee_rates == null
-  ) {
+async function getAuthSchedule() {
+  if (auth_none == null || auth_icrc2 == null) {
     try {
-      await Promise.all([
-        new Promise((resolve, reject) => {(async () => {
-          create_fee_rates = convertTyped({ Map : await dhisper_anon.kay4_create_fee_rates() });
-          const standards = Object.keys(create_fee_rates);
-          if (standards.length == 1) {
-            selected_create_fee_token_standard = standards[0];
-          }
-          const token_map = create_fee_rates[selected_create_fee_token_standard];
-          if (token_map.size == 1) {
-            const [token_canister_id] = token_map.keys();
-            selected_create_fee_token_canister = token_canister_id;
-            selected_create_fee_rate = token_map.get(token_canister_id);
-          };
-          resolve();
-        })()}),
-        // new Promise((resolve) => {(async () => {
-        //     delete_fee_rates = convertTyped({ Map : await dhisper_anon.kay4_delete_fee_rates() });
-        //     const standards = Object.keys(delete_fee_rates);
-        //     if (standards.length == 1) {
-        //       selected_delete_fee_standard = standards[0];
-        //     }
-        //     const token_map = delete_fee_rates[selected_delete_fee_standard];
-        //     if (token_map.size == 1) {
-        //       const [token_canister_id] = token_map.keys();
-        //       selected_delete_token_canister = token_canister_id;
-        //       selected_delete_fee_rate = token_map.get(token_canister_id);
-        //     };
-        //     resolve();
-        // })()}),
-      ]);
-      console.log({ 
-        // create_fee_rates, 
-        selected_create_fee_standard: selected_create_fee_token_standard, selected_create_token_canister : selected_create_fee_token_canister.toText(), selected_create_fee_rate, 
-        // // delete_fee_rates, 
-        // selected_delete_fee_standard, selected_delete_token_canister : selected_delete_token_canister.toText(), selected_delete_fee_rate 
-      });
+      const auths = convertTyped({ Map : await dhisper_anon.kay4_authorizations() });
+      auth_none = auths.None;
+
+      const [token_canister_id] = auths.ICRC_2.keys();
+      const [fee_config] = auths.ICRC_2.values();
+      auth_icrc2 = {
+        canister_id: token_canister_id,
+        ...fee_config, 
+      };
+      console.log({ auth_none, auth_icrc2 });
     } catch (err) {
-      this.catchPopup("Error while Fetching Fee Rates", err);
-      return this.renderPosts();
+      // this.catchPopup("Error while Auth Schedule", err);
+      console.error("Error while Getting Auth Schedule", err);
+      // return this.renderPosts();
     }
   };
 }
@@ -516,6 +478,7 @@ class App {
     this.threadComments = [];
     this.commentInput = "";
 
+    getAuthSchedule();
     this.setupScroll();
     // this.setupIdentity(); //todo: enable this
     this.renderPosts();
@@ -738,21 +701,22 @@ class App {
     if (caller_principal == null || caller_agent == null) {
       return this.selectWallet(e);
     }
-    // check for token balance
-    if (selected_create_fee_token_standard == null) {
-      // return this.selectTokenStandard();
+    const fee_create = is_comments_open ? {
+      minimum_amount: auth_icrc2.create.reply_minimum_amount,
+      character_limit: auth_icrc2.create.reply_character_limit,
+      additional_character_denominator: auth_icrc2.create.reply_additional_character_denominator,
+      additional_amount_numerator: auth_icrc2.create.reply_additional_amount_numerator,
+    } : { 
+      minimum_amount: auth_icrc2.create.thread_minimum_amount,
+      character_limit: auth_icrc2.create.thread_character_limit,
+      additional_character_denominator: auth_icrc2.create.thread_additional_character_denominator,
+      additional_amount_numerator: auth_icrc2.create.thread_additional_amount_numerator,
     };
-    if (selected_create_fee_token_canister == null) {
-      // return this.selectTokenCanister();
-    };
-    
     try {
-      const max_content_size_promise = dhisper_anon.kay4_max_content_size();
       await this.checkBalance();
-      base_cost = Number(selected_create_fee_rate.minimum_amount);
-      max_content_size = Number(await max_content_size_promise);
-      extra_chars = post_content.length > max_content_size? (post_content.length - max_content_size) : 0;
-      extra_cost = extra_chars > 0? extra_chars * Number(selected_create_fee_rate.additional_amount_numerator) / Number(selected_create_fee_rate.additional_byte_denominator) : 0;
+      base_cost = Number(fee_create.minimum_amount);
+      extra_chars = post_content.length > fee_create.character_limit? (post_content.length - Number(fee_create.character_limit)) : 0;
+      extra_cost = extra_chars > 0? extra_chars * Number(fee_create.additional_amount_numerator) / Number(fee_create.additional_character_denominator) : 0;
   
       post_cost = base_cost + token_fee + extra_cost;
       token_approval_insufficient = token_approval.allowance < post_cost;
@@ -762,26 +726,29 @@ class App {
       const total_cost = require_approval? post_cost + token_fee : post_cost;
       token_total = { amount: total_cost, msg: `Total posting fee: ${normalizeNumber(Number(total_cost) / token_power)} ${token_symbol}` };
       token_details = [
-        { amount: base_cost, msg: `Posting fee: ${normalizeNumber(Number(base_cost) / token_power)} ${token_symbol}`, submsg: `helps keep Dhisper spam-free and ad-free for you`},
+        { amount: base_cost, msg: `Posting fee: ${normalizeNumber(Number(base_cost) / token_power)} ${token_symbol}`, submsg: `skip cooldowns, helps keep Dhisper spam-free and ad-free for you`},
         { amount: token_fee, msg: `Payment fee: ${normalizeNumber(Number(token_fee) / token_power)} ${token_symbol}`, submsg: `covers the small cost of transferring your token`},
         { amount: require_approval ? token_fee : BigInt(0), msg: `Payment Approval fee: ${normalizeNumber(Number(token_fee) / token_power)} ${token_symbol}`, submsg: `allows Dhisper to deduct the posting fee automatically for you`},
-        { amount: extra_cost, msg: `Extra characters fee: ${normalizeNumber(Number(extra_cost) / token_power)} ${token_symbol}`, submsg: `You exceed ${max_content_size} characters; either trim it, or pay a little extra` },
+        { amount: extra_cost, msg: `Extra characters fee: ${normalizeNumber(Number(extra_cost) / token_power)} ${token_symbol}`, submsg: `You exceed ${fee_create.character_limit} characters; either trim it, or pay a little extra` },
       ];
       if (!is_seeing_cost) {
         is_seeing_cost = true;
         return this.renderPosts();
       }
-      if (token_balance < total_cost) {
-        is_waiting_balance = true;
-        return this.renderPosts();
-      };
-      this.closeBalanceWaiter(e, true);
-
-      if (require_approval) {
-        is_waiting_approval = true;
-        return this.renderPosts();
-      } else this.closePayment(e, true);
+      if (is_paying) {
+        if (token_balance < total_cost) {
+          is_waiting_balance = true;
+          return this.renderPosts();
+        };
+        this.closeBalanceWaiter(e, true);
   
+        if (require_approval) {
+          is_waiting_approval = true;
+          return this.renderPosts();
+        } else this.closePayment(e, true);
+      } else { // free
+        this.closePayment(e, true);
+      }
       const dhisper_user = genDhisper(dhisper_id, { agent: caller_agent });
       const create_post_res = await dhisper_user.kay4_create({
         thread: this.activeThread ? [this.activeThread.id] : [],
@@ -789,12 +756,13 @@ class App {
         files: [],
         owners: [],
         metadata: [],
-        authorization: { ICRC_2: {
+        authorization: is_paying ? { ICRC_2: {
           subaccount: [],
-          canister_id: selected_create_fee_token_canister,
+          canister_id: auth_icrc2.canister_id,
           fee: [BigInt(base_cost + extra_cost)]
-        } }
+        } } : { None : { subaccount: [] } },
       });
+      is_trying = false;
       is_paying = false;
       is_posting = false;
       if ('Err' in create_post_res) {
@@ -844,8 +812,9 @@ class App {
       if (is_posting) {
         if (is_checking_balance) {
           is_checking_balance = false;
-        } else if (is_paying) {
+        } else if (is_paying || is_trying) {
           is_paying = false;
+          is_trying = false;
         } else is_posting = false; 
       }
     }
@@ -980,7 +949,6 @@ class App {
       caller_principal = identity.getPrincipal();
       caller_account = AccountIdentifier.fromPrincipal({ principal: caller_principal }).toHex();
       console.log({ caller: shortPrincipal(caller_principal), caller_account });
-      await prepareTokens();
       if (e != null && is_posting) {
         this.createNewPost(e);
       } else this.checkBalance();
@@ -998,7 +966,7 @@ class App {
     is_approving = true;
     this.renderPosts();
     try {
-      const token_user = genToken(selected_create_fee_token_canister, { agent: caller_agent });
+      const token_user = genToken(auth_icrc2.canister_id, { agent: caller_agent });
       const days30ms = 30n * 24n * 60n * 60n * 1000n; // 30 days in ms as BigInt
       const approve_res = await token_user.icrc2_approve({
         from_subaccount: [],
@@ -1037,10 +1005,12 @@ class App {
 
   closePayment(e, force = false) {
     e.preventDefault();
-    if (!force && is_paying) return;
+    if (!force && (is_paying || is_trying)) return;
     closeDrawer('cost', () => {
       is_seeing_cost = false;
       if (!force) is_posting = false;
+      is_paying = false;
+      is_trying = false;
       this.renderPosts();
     })     
   };
@@ -1160,7 +1130,6 @@ class App {
   async openStart(e) {
     e.preventDefault();
     is_start_open = true;
-    await prepareTokens();
     if (caller_principal) {
       this.checkBalance()
     } else this.renderPosts();
@@ -1181,7 +1150,7 @@ class App {
   }
 
   async checkBalance() {
-    const token_anon = genToken(selected_create_fee_token_canister);
+    const token_anon = genToken(auth_icrc2.canister_id);
     const token_fee_promise = token_anon.icrc1_fee();
     const token_name_promise = token_anon.icrc1_name();
     const token_symbol_promise = token_anon.icrc1_symbol();
@@ -1194,7 +1163,6 @@ class App {
     });
     is_checking_balance = true;
     this.renderPosts();
-    token_id = selected_create_fee_token_canister;
     try {
       token_fee = Number(await token_fee_promise);
       token_name = await token_name_promise;
@@ -1240,7 +1208,7 @@ class App {
     is_transferring = true;
     this.renderPosts();
     const addr = isValidDestination(withdraw_receiver);
-    const token_user = genToken(selected_create_fee_token_canister, { agent: caller_agent });
+    const token_user = genToken(auth_icrc2.canister_id, { agent: caller_agent });
     if (addr.p) {
       try {
         const transfer_res = await token_user.icrc1_transfer({
@@ -1300,7 +1268,7 @@ class App {
     is_approving = true;
     this.renderPosts();
     try {
-      const token_user = genToken(selected_create_fee_token_canister, { agent: caller_agent });
+      const token_user = genToken(auth_icrc2.canister_id, { agent: caller_agent });
       const revoke_res = await token_user.icrc2_approve({
         from_subaccount: [],
         amount: 0,
@@ -1558,9 +1526,15 @@ class App {
           <small>${post_payment_pitch}</small>
         </p>
         <div class="action-bar">
-          <button class="action-btn" ?disabled=${is_paying} @click=${(e) => this.closePayment(e)}>Close</button>
-          <button class="action-btn success" ?disabled=${is_paying} @click=${(e) => {
+          <button class="action-btn" ?disabled=${is_paying || is_trying} @click=${(e) => this.closePayment(e)}>Close</button>
+          <button class="action-btn" ?disabled=${is_paying || is_trying} @click=${(e) => {
+            is_trying = true;
+            is_paying = false;
+            this.createNewPost(e);
+          }}>${is_trying ? html`<span class="spinner"></span> Trying...` : html`Try Free`}</button>
+          <button class="action-btn success" ?disabled=${is_paying || is_trying} @click=${(e) => {
             is_paying = true;
+            is_trying = false;
             this.createNewPost(e);
           }}>${is_paying ? html`<span class="spinner"></span> Paying...` : html`Pay`}</button>
         </div>

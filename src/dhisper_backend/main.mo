@@ -19,12 +19,13 @@ import Queue "../util/motoko/StableCollections/Queue";
 // todo: background process
 // todo: rename modifications
 
-(
-  with migration = func(_ : { var owners : RBTree.RBTree<Kay2.Identity, RBTree.RBTree<Nat, ()>> }) : {} {
-    // discard oldVar
-    {};
-  }
-)
+// todo: enable this when deploying to mainnet
+// (
+//   with migration = func(_ : { var owners : RBTree.RBTree<Kay2.Identity, RBTree.RBTree<Nat, ()>> }) : {} {
+//     // discard owners
+//     {};
+//   }
+// )
 shared (install) actor class Canister(
   deploy : {
     #Init : { kay1 : Kay1.Init; kay2 : Kay2.Init };
@@ -46,41 +47,45 @@ shared (install) actor class Canister(
       metadata := Kay1.init(metadata, init.kay1);
       metadata := Kay2.init(metadata, init.kay2);
     };
-    case _ {
-      metadata := Value.delete(metadata, Kay4.MAX_THREADS);
-      metadata := Value.delete(metadata, Kay4.MAX_CONTENT);
-      metadata := Value.delete(metadata, Kay4.FEE_COLLECTORS);
-      metadata := Value.delete(metadata, Kay4.CREATE_FEE_RATES);
-      metadata := Value.delete(metadata, Kay4.DELETE_FEE_RATES);
-
-      let auth_val : Value.Type = #Map([
-        ("ICRC_2", #ValueMap([(#Principal(Principal.fromText("ryjl3-tyaaa-aaaaa-aaaba-cai")), #Map([("create", #Map([("reply_additional_amount_numerator", #Nat(1)), ("reply_additional_character_denominator", #Nat(1)), ("reply_character_limit", #Nat(1_024)), ("reply_minimum_amount", #Nat(100_000)), ("thread_additional_amount_numerator", #Nat(10)), ("thread_additional_character_denominator", #Nat(1)), ("thread_character_limit", #Nat(256)), ("thread_minimum_amount", #Nat(1_000_000))]))]))])),
-        ("None", #Map([("create", #Map([("reply_character_limit", #Nat(256)), ("reply_cooldown", #Nat(15)), ("thread_character_limit", #Nat(64)), ("thread_cooldown", #Nat(60))]))])),
-      ]);
-      metadata := Value.insert(metadata, Kay4.AUTHORIZATIONS, auth_val);
-      metadata := Value.setNat(metadata, Kay4.MAX_REPLIES, ?200);
-
-      // migrate
-      for ((p_id, p1) in RBTree.entries(posts)) {
-        // post1 to post2
-        let p2 : Kay4.Post2 = { p1 with tips = RBTree.empty(); report = null };
-        posts2 := RBTree.insert(posts2, Nat.compare, p_id, p2);
-
-        // register each post id to owners
-        // for ((_, p1_owners) in RBTree.entries(p1.owners_versions)) {
-        //   for ((owner, _) in RBTree.entries(p1_owners)) {
-        //     var owner_posts = switch (RBTree.get(owners, Kay2.compareIdentity, owner)) {
-        //       case (?found) found;
-        //       case _ RBTree.empty();
-        //     };
-        //     owner_posts := RBTree.insert(owner_posts, Nat.compare, p_id, ());
-        //     owners := RBTree.insert(owners, Kay2.compareIdentity, owner, owner_posts);
-        //   };
-        // };
-      };
-      posts := RBTree.empty();
-    };
+    case _ ();
   };
+  metadata := Value.delete(metadata, Kay4.MAX_THREADS);
+  metadata := Value.setNat(metadata, Kay4.MAX_REPLIES, ?200);
+  metadata := Value.delete(metadata, Kay4.MAX_CONTENT);
+
+  metadata := Value.delete(metadata, Kay4.FEE_COLLECTORS);
+  metadata := Value.delete(metadata, Kay4.CREATE_FEE_RATES);
+  metadata := Value.delete(metadata, Kay4.DELETE_FEE_RATES);
+
+  metadata := Value.setNat(metadata, Kay4.DEFAULT_TAKE, ?100);
+  metadata := Value.setNat(metadata, Kay4.MAX_TAKE, ?200);
+  metadata := Value.setNat(metadata, Kay4.MAX_QUERY_BATCH, ?100);
+
+  let auth_val : Value.Type = #Map([
+    ("ICRC_2", #ValueMap([(#Principal(Principal.fromText("ryjl3-tyaaa-aaaaa-aaaba-cai")), #Map([("create", #Map([("reply_additional_amount_numerator", #Nat(1)), ("reply_additional_character_denominator", #Nat(1)), ("reply_character_limit", #Nat(1_024)), ("reply_minimum_amount", #Nat(100_000)), ("thread_additional_amount_numerator", #Nat(10)), ("thread_additional_character_denominator", #Nat(1)), ("thread_character_limit", #Nat(256)), ("thread_minimum_amount", #Nat(1_000_000))]))]))])),
+    ("None", #Map([("create", #Map([("reply_character_limit", #Nat(256)), ("reply_cooldown", #Nat(15)), ("thread_character_limit", #Nat(64)), ("thread_cooldown", #Nat(60))]))])),
+  ]);
+  metadata := Value.insert(metadata, Kay4.AUTHORIZATIONS, auth_val);
+
+  // migrate
+  for ((p_id, p1) in RBTree.entries(posts)) {
+    // post1 to post2
+    let p2 : Kay4.Post2 = { p1 with tips = RBTree.empty(); report = null };
+    posts2 := RBTree.insert(posts2, Nat.compare, p_id, p2);
+
+    // register each post id to owners
+    // for ((_, p1_owners) in RBTree.entries(p1.owners_versions)) {
+    //   for ((owner, _) in RBTree.entries(p1_owners)) {
+    //     var owner_posts = switch (RBTree.get(owners, Kay2.compareIdentity, owner)) {
+    //       case (?found) found;
+    //       case _ RBTree.empty();
+    //     };
+    //     owner_posts := RBTree.insert(owner_posts, Nat.compare, p_id, ());
+    //     owners := RBTree.insert(owners, Kay2.compareIdentity, owner, owner_posts);
+    //   };
+    // };
+  };
+  posts := RBTree.empty();
 
   func log(t : Text) = logs := Kay1.log(logs, t);
   public shared query func kay1_logs() : async [Text] = async Queue.arrayTail(logs);
