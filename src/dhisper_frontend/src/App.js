@@ -520,6 +520,11 @@ class App {
           for (const i in timestamps) posts[i]['timestamp'] = timestamps[i].length > 0? new Date(Number(timestamps[i][0]) / 1000000) : null;
           resolve();
         })()}),
+        new Promise((resolve) => {(async () => {
+          const auths = await dhisper_anon.kay4_authorizations_of(post_ids);
+          for (const i in auths) posts[i]['auth'] = auths[i].length > 0? auths[i][0] : { None: { owner, subaccount: [] }};
+          resolve();
+        })()}),
         ...post_ids.map((post_id, i) => {
           return new Promise((resolve) => {(async () => {
             const owners = await dhisper_anon.kay4_owners_of(post_id, [], [1]);
@@ -648,6 +653,7 @@ class App {
     const replies = [];
     let content_count = 0;
     let timestamp_count = 0;
+    let auth_count = 0;
     let owner_count = 0;
     while (true) {
       const last = replies.length - 1;
@@ -672,6 +678,14 @@ class App {
               replies[timestamp_count + +i]['timestamp'] = timestamps[i].length > 0? new Date(Number(timestamps[i][0]) / 1000000) : null;
             };
             timestamp_count += timestamps.length;
+            resolve();
+          })()}),
+          new Promise((resolve) => {(async () => {
+            const auths = await dhisper_anon.kay4_authorizations_of(reply_ids);
+            for (const i in auths) {
+              replies[auth_count + +i]['auth'] = auths[i].length > 0? auths[i][0] : { None: { owner, subaccount: [] }};
+            };
+            auth_count += auths.length;
             resolve();
           })()}),
           ...reply_ids.map((reply_id, i) => {
@@ -779,10 +793,16 @@ class App {
           let content = '';
           let timestamp = '';
           let owner = Principal.anonymous();
+          let auth = { None: { owner, subaccount: [] }};
           await Promise.all([
             new Promise((resolve) => {(async () => {
               const contents = await dhisper_anon.kay4_contents_of([id]);
               content = contents[0].length > 0? contents[0][0] : "";
+              resolve();
+            })()}),
+            new Promise((resolve) => {(async () => {
+              const auths = await dhisper_anon.kay4_authorizations_of([id]);
+              auth = auths[0].length > 0? auths[0][0] : auth;
               resolve();
             })()}),
             new Promise((resolve) => {(async () => {
@@ -796,7 +816,7 @@ class App {
               resolve();
             })()}),
           ]);
-          const new_post = { id, content, timestamp, owner };
+          const new_post = { id, content, auth, timestamp, owner };
           if (this.currentIndex == null) this.posts = [new_post]; else {
             this.posts = [new_post, this.posts[this.currentIndex]];
             this.currentIndex = 1;
@@ -1327,7 +1347,7 @@ class App {
           <div class="panel-scroll">
             <div class="comment-grid">
               <div class="comment">
-                <div class="meta">#${this.activeThread.id} • ${this.activeThread.owner .isAnonymous()? 'DELETED' : shortPrincipal(this.activeThread.owner)}${this.activeThread.timestamp ? ' • ' + timeAgo(this.activeThread.timestamp) : ''}</div>
+                <div class="meta">#${this.activeThread.id} • ${this.activeThread.owner .isAnonymous()? 'DELETED' : shortPrincipal(this.activeThread.owner)}${this.activeThread.timestamp ? ' • ' + timeAgo(this.activeThread.timestamp) : ''}${'ICRC_2' in this.activeThread.auth? ' • PAID' : ''}</div>
                 <div class="content">${this.activeThread.content}</div>
               </div>
               <button class="action-btn" @click=${(e) => this.openReply(e, this.activeThread)}>⋮</button>
@@ -1335,7 +1355,7 @@ class App {
             ${this.threadComments.map(comment => html`
               <div class="comment-grid">
                 <div class="comment">
-                  <div class="meta">#${comment.id} • ${comment.owner.isAnonymous()? 'DELETED' : shortPrincipal(comment.owner)}${comment.timestamp ? ` • ${timeAgo(comment.timestamp)}` : ''}</div>
+                  <div class="meta">#${comment.id} • ${comment.owner.isAnonymous()? (this.comment.auth.None.owner == this.activeThread.auth.None.owner? 'REMOVED by OP' : 'DELETED') : shortPrincipal(comment.owner)}${comment.timestamp ? ` • ${timeAgo(comment.timestamp)}` : ''}${'ICRC_2' in comment.auth? ' • PAID' : ''}</div>
                   <div class="content">${comment.content}</div>
                 </div>
                 <button class="action-btn" @click=${(e) => this.openReply(e, comment)}>⋮</button>

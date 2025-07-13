@@ -571,7 +571,7 @@ shared (install) actor class Canister(
   //   batcher.finalize();
   // };
 
-  // public shared query func kay4_authorizations_of(post_ids : [Nat]) : async [?Kay2.Authorized] = async Kay4.batchPostId(post_ids, posts, metadata, Kay4.getAuthorization);
+  public shared query func kay4_authorizations_of(post_ids : [Nat]) : async [?Kay2.Authorized] = async Kay4.batchPostId(post_ids, posts2, metadata, Kay4.getAuthorization);
   // public shared query func kay4_authorizations_at(postvers : [Kay4.PostVersion]) : async [?Kay2.Authorized] = async Kay4.batchPostVersion(postvers, posts, metadata, #LastValue, Kay4.trackAuthorization);
 
   public shared query func kay4_timestamps_of(post_ids : [Nat]) : async [?Nat64] = async Kay4.batchPostId(post_ids, posts2, metadata, Kay4.getTimestamp);
