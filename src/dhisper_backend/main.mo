@@ -409,11 +409,21 @@ shared (install) actor class Canister(
                 case _ false;
               };
               if (is_paid_thread) {
-                let last_bump = switch (RBTree.max(replies)) {
-                  case (?(latest_reply, _)) latest_reply;
-                  case _ op_id;
+                var last_paid_reply = op_id;
+                label finding_last_paid_reply for ((reply_id, _) in RBTree.entriesReverse(replies)) switch (RBTree.get(posts2, Nat.compare, reply_id)) {
+                  case (?found_reply) switch (RBTree.min(found_reply.versions)) {
+                    case (?(_, reply_must)) switch (reply_must.authorization) {
+                      case (#ICRC_2 _) {
+                        last_paid_reply := reply_id;
+                        break finding_last_paid_reply;
+                      };
+                      case _ ();
+                    };
+                    case _ ();
+                  };
+                  case _ ();
                 };
-                bumps := RBTree.delete(bumps, Nat.compare, last_bump);
+                bumps := RBTree.delete(bumps, Nat.compare, last_paid_reply);
               };
               is_paid_thread;
             };

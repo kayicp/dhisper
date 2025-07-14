@@ -16,17 +16,15 @@ let caller_account_copied = false;
 let caller_account_copy_failed = false;
 
 /*
-todo: add Remove button
-todo: dont show deleted thread
-todo: provide clarity for post errors
-todo: use kay4_auth_of to label PAID or FREE
-todo: label "REMOVED BY THREAD OWNER"
-todo: label "REMOVED BY CANISTER OWNER"
 todo: url pathways
+todo: fix delete confirm msg if deleting paid thread owner
+todo: provide clarity for post errors
+todo: label "REMOVED by MOD"
 todo: fix token details msg n submsg for reply based on current thread's auth
 todo: add cooldown timer
 
 todo: change gradient 
+todo: dont show deleted thread
 todo: start 2x3 keypad, each button will open their own pane (balance, approval, etc.) 
 todo: put thread details in comment panel
 todo: replace css animation with css transition
@@ -118,6 +116,7 @@ let is_checking_balance = false;
 let is_waiting_approval = false;
 let is_approving = false;
 let is_delete_open = false;
+let delete_type = 'self';
 let is_deleting = false;
 let is_withdraw_open = false;
 let is_transferring = false;
@@ -522,7 +521,7 @@ class App {
         })()}),
         new Promise((resolve) => {(async () => {
           const auths = await dhisper_anon.kay4_authorizations_of(post_ids);
-          for (const i in auths) posts[i]['auth'] = auths[i].length > 0? auths[i][0] : { None: { owner, subaccount: [] }};
+          for (const i in auths) posts[i]['auth'] = auths[i].length > 0? auths[i][0] : { None: { owner : Principal.anonymous(), subaccount: [] }};
           resolve();
         })()}),
         ...post_ids.map((post_id, i) => {
@@ -683,7 +682,7 @@ class App {
           new Promise((resolve) => {(async () => {
             const auths = await dhisper_anon.kay4_authorizations_of(reply_ids);
             for (const i in auths) {
-              replies[auth_count + +i]['auth'] = auths[i].length > 0? auths[i][0] : { None: { owner, subaccount: [] }};
+              replies[auth_count + +i]['auth'] = auths[i].length > 0? auths[i][0] : { None: { owner : Principal.anonymous(), subaccount: [] }};
             };
             auth_count += auths.length;
             resolve();
@@ -743,7 +742,7 @@ class App {
       const total_cost = require_approval? post_cost + token_fee : post_cost;
       token_total = { amount: total_cost, msg: `Total posting fee: ${normalizeNumber(Number(total_cost) / token_power)} ${token_symbol}` };
       token_details = [
-        { amount: base_cost, msg: `${is_comments_open? 'Replying' : 'New Thread'} fee: ${normalizeNumber(Number(base_cost) / token_power)} ${token_symbol}`, submsg: html`• Post <strong>instantly</strong> - no cooldown or competition<br>• Write a <strong>longer</strong> ${is_comments_open? 'reply' : 'thread opener'} - ${fee_create.character_limit} characters or more${is_comments_open? html`<br>• <strong>Boost visibility</strong> of the thread (if it's paid too) - bump it to the top of the feed<br>• <strong>Stay protected</strong> from deletion by the thread owner` : html`<br>• <strong>Gain visibility</strong> with automatic bumps from paid replies<br>• <strong>Moderate</strong> free replies in your thread`}` },
+        { amount: base_cost, msg: `${is_comments_open? 'Replying' : 'New Thread'} fee: ${normalizeNumber(Number(base_cost) / token_power)} ${token_symbol}`, submsg: html`• Post <strong>instantly</strong> - no cooldown or competition<br>• Write a <strong>longer</strong> ${is_comments_open? 'reply' : 'thread opener'} - up to ${fee_create.character_limit} characters${is_comments_open? html`<br>• <strong>Boost visibility</strong> of the thread (if it's paid too) - bump it to the top of the feed<br>• <strong>Stay protected</strong> from deletion by the thread owner` : html`<br>• <strong>Gain visibility</strong> with automatic bumps from paid replies<br>• <strong>Moderate</strong> free replies in your thread`}` },
         { amount: token_fee, msg: `Payment fee: ${normalizeNumber(Number(token_fee) / token_power)} ${token_symbol}`, submsg: `Covers the small cost of transferring your token`},
         { amount: require_approval ? token_fee : BigInt(0), msg: `Payment Approval fee: ${normalizeNumber(Number(token_fee) / token_power)} ${token_symbol}`, submsg: `Allows Dhisper to deduct the posting fee automatically for you`},
         { amount: extra_cost, msg: `Extra characters fee: ${normalizeNumber(Number(extra_cost) / token_power)} ${token_symbol}`, submsg: `You exceed ${fee_create.character_limit} characters; either trim it, or pay a little extra` },
@@ -1085,16 +1084,10 @@ class App {
     this.renderPosts();
   }
 
-  openDeleteConfirm(e) {
+  openDeleteConfirm(e, del_type = 'self') {
     e.preventDefault();
-    // this.showPopup('Delete Confirmation', "There's no going back. Are you sure?", [{
-    //   label: 'Cancel',
-    //   click: (ee) => this.closePopup(ee),
-    // }, {
-    //   label: 'Delete',
-    //   click: (ee) => {},
-    // }]);
     is_delete_open = true;
+    delete_type = del_type;
     this.renderPosts();
   }
 
@@ -1355,7 +1348,7 @@ class App {
             ${this.threadComments.map(comment => html`
               <div class="comment-grid">
                 <div class="comment">
-                  <div class="meta">#${comment.id} • ${comment.owner.isAnonymous()? (this.comment.auth.None.owner == this.activeThread.auth.None.owner? 'REMOVED by OP' : 'DELETED') : shortPrincipal(comment.owner)}${comment.timestamp ? ` • ${timeAgo(comment.timestamp)}` : ''}${'ICRC_2' in comment.auth? ' • PAID' : ''}</div>
+                  <div class="meta">#${comment.id} • ${comment.owner.isAnonymous()? ('ICRC_2' in this.activeThread.auth && 'None' in comment.auth && this.activeThread.owner.toText() == comment.auth.None.owner.toText()? 'REMOVED by T.O.' : 'DELETED') : shortPrincipal(comment.owner)}${comment.timestamp ? ` • ${timeAgo(comment.timestamp)}` : ''}${'ICRC_2' in comment.auth? ' • PAID' : ''}</div>
                   <div class="content">${comment.content}</div>
                 </div>
                 <button class="action-btn" @click=${(e) => this.openReply(e, comment)}>⋮</button>
@@ -1384,9 +1377,10 @@ class App {
       <div class="action-bar sticky">
         <button class="action-btn" @click=${(e) => this.closeReply(e)}>Close</button>
         ${caller_principal && this.interestingReply.owner.toText() == caller_principal.toText() ? 
-          html`<button class="action-btn failed" @click=${(e) => this.openDeleteConfirm(e)}>Delete</button>`
+          html`<button class="action-btn failed" @click=${(e) => this.openDeleteConfirm(e, 'self')}>Delete</button>`
           : html`<button class="action-btn success" ?disabled=${true}>Tip</button>`
         }
+        ${caller_principal && caller_principal.toText() == this.activeThread.owner.toText() && 'ICRC_2' in this.activeThread.auth && !this.interestingReply.owner.isAnonymous() && this.interestingReply.owner.toText() != caller_principal.toText() && 'None' in this.interestingReply.auth ? html`<button class="action-btn failed" @click=${(e) => this.openDeleteConfirm(e, 'thread_owner')}>Remove</button>` : null}
       </div>
     </div>
     ` : null;
@@ -1456,12 +1450,16 @@ class App {
     </div>
     <div class="drawer delete-confirm slide-in-up">
       <p>
-        <strong>Delete Confirmation</strong><br>
-        <small>There's no going back. Are you sure?</small>
+        <strong>Confirm ${delete_type == 'self' ? 'Delete Post' : 'Remove Reply'}?</strong><br>
+        <small>
+          ${delete_type == 'self' 
+            ? "This will permanently delete your post. This action cannot be undone. Do you want to continue?" 
+            : "As the thread owner, you can remove this reply. Please do this only if the reply is spam or violates any law."}
+        </small>
       </p>
       <div class="action-bar">
         <button class="action-btn success" ?disabled=${is_deleting} @click=${(e) => this.closeDeleteConfirm(e)}>No</button>
-        <button class="action-btn failed" ?disabled=${is_deleting} @click=${(e) => this.deletePost(e)}>${is_deleting? html`<span class="spinner"></span> Deleting...` : html`Yes, Delete`}</button>
+        <button class="action-btn failed" ?disabled=${is_deleting} @click=${(e) => this.deletePost(e)}>${is_deleting? html`<span class="spinner"></span> ${delete_type == 'self'? 'Delet':'Remov'}ing...` : html`Yes, ${delete_type == 'self'? 'Delete' : 'Remove'}`}</button>
       </div>
     </div>` : null;
     let withdraw_form = null;
@@ -1495,8 +1493,8 @@ class App {
     </div>
     <div class="drawer revoke slide-in-up">
       <p>
-        <strong>Revoke Confirmation</strong><br>
-        <small><small>This will disable auto-deduction on your balance on paid operations by the app. You will have to approve the app again the next time you want to perform paid operations. Continue?<br><br>
+        <strong>Confirm Revoke?</strong><br>
+        <small><small>Revoking approval will stop the app from automatically deducting your ${token_symbol} for paid actions. You'll need to approve it again before making future payments.<br><br>
         Revocation fee: ${normalizeNumber(token_fee / token_power)} ${token_symbol}<br>
         Balance after revoking: ${normalizeNumber((token_balance - token_fee) / token_power)} ${token_symbol}</small></small>
       </p>
