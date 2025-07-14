@@ -355,7 +355,6 @@ shared (install) actor class Canister(
 
         let character_limit = Value.getNat(create_auth, key_prefix # "_character_limit", 0);
         if (character_limit == 0) return Error.text("Metadata `" # create_key # "." # key_prefix # "_character_limit` is not set properly");
-        if (content_size > character_limit) return #Err(#ContentTooLarge { current_size = content_size; maximum_size = character_limit });
 
         let minimum_amount = Value.getNat(create_auth, key_prefix # "_minimum_amount", 0);
         if (minimum_amount == 0) return Error.text("Metadata `" # create_key # "." # key_prefix # "_minimum_amount` is not set properly");

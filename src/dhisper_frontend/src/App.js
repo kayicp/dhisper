@@ -16,14 +16,14 @@ let caller_account_copied = false;
 let caller_account_copy_failed = false;
 
 /*
-todo: url pathways
 todo: fix delete confirm msg if deleting paid thread owner
 todo: provide clarity for post errors
-todo: label "REMOVED by MOD"
 todo: fix token details msg n submsg for reply based on current thread's auth
 todo: add cooldown timer
 
+todo: url pathways
 todo: change gradient 
+todo: label "REMOVED by MOD"
 todo: dont show deleted thread
 todo: start 2x3 keypad, each button will open their own pane (balance, approval, etc.) 
 todo: put thread details in comment panel
@@ -237,6 +237,16 @@ function isValidDestination(str) {
     }
   }
   return { p, a, tips, is_valid, dest }
+}
+
+function cleanWhitespace(text) {
+  return text
+    .replace(/[\t\r]+/g, ' ')             // Convert tabs and carriage returns to space
+    .replace(/ {2,}/g, ' ')               // Collapse multiple spaces
+    .replace(/\n{3,}/g, '\n\n')           // Reduce 3+ newlines to 2
+    .replace(/[ \t]+\n/g, '\n')           // Remove space before newline
+    .replace(/\n[ \t]+/g, '\n')           // Remove space after newline
+    .replace(/^\s+|\s+$/g, '');           // Trim leading/trailing whitespace
 }
 
 /**
@@ -707,7 +717,7 @@ class App {
 
   async createNewPost(e) {
     e.preventDefault();
-    post_content = !post_content ? "" : post_content.trim();
+    post_content = !post_content ? "" : cleanWhitespace(post_content);
     if (post_content.length === 0) {
       is_posting = false;
       return this.renderPosts();
@@ -1553,7 +1563,7 @@ class App {
             is_trying = true;
             is_paying = false;
             this.createNewPost(e);
-          }}>${is_trying ? html`<span class="spinner"></span> Trying...` : html`Free`}</button>
+          }}>${is_trying ? html`<span class="spinner"></span> Trying...` : html`Try Free`}</button>
           <button class="action-btn success" ?disabled=${is_paying || is_trying} @click=${(e) => {
             is_paying = true;
             is_trying = false;

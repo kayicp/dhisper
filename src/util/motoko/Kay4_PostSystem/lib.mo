@@ -114,21 +114,27 @@ module {
 		#Unauthorized : Kay2.Unauthorized;
 	};
 	public func cleanText(_t : Text) : Text {
-		let replacements = [
-			("  ", " "),
-			("\n\n", "\n"),
-			("\r\r", "\r"),
-			("\t\t", "\t"),
-		];
-		var t = _t;
-		for ((search, replacement) in replacements.vals()) {
-			t := Text.replace(t, #text search, replacement);
+		// Convert tabs and carriage returns to space
+		var t = Text.map(
+			_t,
+			func(c) {
+				if (c == '\t' or c == '\r') { ' ' } else { c };
+			},
+		);
+		// Repeatedly collapse spaces and newlines until stable
+		label loopy while (true) {
+			let original = t;
+			t := Text.replace(t, #text "  ", " ");
+			t := Text.replace(t, #text "\n\n\n", "\n\n");
+			t := Text.replace(t, #text " \n", "\n");
+			t := Text.replace(t, #text "\n ", "\n");
+			if (t == original) break loopy;
 		};
 		Text.trim(
 			t,
 			#predicate(
 				func(c) {
-					c == ' ' or c == '\n' or c == '\r' or c == '\t';
+					c == ' ' or c == '\n';
 				}
 			),
 		);
