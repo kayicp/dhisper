@@ -16,7 +16,6 @@ let caller_account_copied = false;
 let caller_account_copy_failed = false;
 
 /*
-todo: fix token details msg n submsg for reply based on current thread's auth
 todo: show how much extra chars
 todo: provide clarity for post errors
 todo: rethink fee schedule
@@ -753,7 +752,9 @@ class App {
       const total_cost = require_approval? post_cost + token_fee : post_cost;
       token_total = { amount: total_cost, msg: `Total posting fee: ${normalizeNumber(Number(total_cost) / token_power)} ${token_symbol}` };
       token_details = [
-        { amount: base_cost, msg: `${is_comments_open? 'Replying' : 'New Thread'} fee: ${normalizeNumber(Number(base_cost) / token_power)} ${token_symbol}`, submsg: html`• Post <strong>instantly</strong> - no cooldown or competition<br>• Write a <strong>longer</strong> ${is_comments_open? 'reply' : 'thread opener'} - up to ${fee_create.character_limit} characters${is_comments_open? html`<br>• <strong>Boost visibility</strong> of the thread (if it's paid too) - bump it to the top of the feed<br>• <strong>Stay protected</strong> from deletion by the thread owner` : html`<br>• <strong>Gain visibility</strong> with automatic bumps from paid replies<br>• <strong>Moderate</strong> free replies in your thread`}` },
+        { amount: base_cost, msg: `${is_comments_open? 'Replying' : 'New Thread'} fee: ${normalizeNumber(Number(base_cost) / token_power)} ${token_symbol}`, submsg: html`• <strong>Post instantly</strong> - skip cooldowns and competitions<br>• <strong>Say more</strong> - up to ${fee_create.character_limit} characters${is_comments_open
+            ? 'ICRC_2' in this.activeThread.auth? html`<br>• <strong>Boost attention</strong> - bump the thread to the top<br>• <strong>Stay visible</strong> - your reply can't be deleted by thread owner` : null
+          : html`<br>• <strong>Gain attention</strong> - paid replies bump your thread to the top<br>• <strong>Own the space</strong> - delete free replies in your thread`}` },
         { amount: token_fee, msg: `Payment fee: ${normalizeNumber(Number(token_fee) / token_power)} ${token_symbol}`, submsg: `Covers the small cost of transferring your token`},
         { amount: require_approval ? token_fee : BigInt(0), msg: `Payment Approval fee: ${normalizeNumber(Number(token_fee) / token_power)} ${token_symbol}`, submsg: `Allows Dhisper to deduct the posting fee automatically for you`},
         { amount: extra_cost, msg: `Extra characters fee: ${normalizeNumber(Number(extra_cost) / token_power)} ${token_symbol}`, submsg: `You exceed ${fee_create.character_limit} characters; either trim it, or pay a little extra` },
@@ -1429,8 +1430,8 @@ class App {
           ? html`<span class="spinner"></span> Connecting...`
           : html`Sign in to see this`}</button>`}<br><br>
           <strong>Sort Threads by:</strong><br>
-          <button class="action-btn ${selected_sorting == 'new'? 'success' : ''} compact" @click=${(e) => this.refresh(e, 'new')}>Newest</button>&nbsp
-          <button class="action-btn ${selected_sorting == 'new'? '' : 'success'} compact" @click=${(e) => this.refresh(e, 'hot')}>Last Activity</button>
+          <button class="action-btn ${selected_sorting == 'new'? 'success' : ''} compact" @click=${(e) => this.refresh(e, 'new')}>Recently Created</button>&nbsp
+          <button class="action-btn ${selected_sorting == 'new'? '' : 'success'} compact" @click=${(e) => this.refresh(e, 'hot')}>Recently Bumped</button>
         </p>
       </div>
       <div class="action-bar sticky">
