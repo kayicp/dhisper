@@ -16,11 +16,12 @@ let caller_account_copied = false;
 let caller_account_copy_failed = false;
 
 /*
-todo: fix delete confirm msg if deleting paid thread owner
-todo: provide clarity for post errors
 todo: fix token details msg n submsg for reply based on current thread's auth
-todo: add cooldown timer
+todo: show how much extra chars
+todo: provide clarity for post errors
+todo: rethink fee schedule
 
+todo: add cooldown timer
 todo: url pathways
 todo: change gradient 
 todo: label "REMOVED by MOD"
@@ -116,7 +117,7 @@ let is_checking_balance = false;
 let is_waiting_approval = false;
 let is_approving = false;
 let is_delete_open = false;
-let delete_type = 'self';
+let delete_type = 'own post';
 let is_deleting = false;
 let is_withdraw_open = false;
 let is_transferring = false;
@@ -1094,7 +1095,7 @@ class App {
     this.renderPosts();
   }
 
-  openDeleteConfirm(e, del_type = 'self') {
+  openDeleteConfirm(e, del_type = 'own post') {
     e.preventDefault();
     is_delete_open = true;
     delete_type = del_type;
@@ -1316,6 +1317,10 @@ class App {
     this.checkBalance();
   }
 
+  deletePostBtn(del_type) {
+    return html`<button class="action-btn failed" @click=${(e) => this.openDeleteConfirm(e, del_type)}>Delete</button>`
+  }
+
   renderPosts() {
     if (this.isSliding) return;
     let current_post;
@@ -1386,11 +1391,20 @@ class App {
       </div>
       <div class="action-bar sticky">
         <button class="action-btn" @click=${(e) => this.closeReply(e)}>Close</button>
-        ${caller_principal && this.interestingReply.owner.toText() == caller_principal.toText() ? 
-          html`<button class="action-btn failed" @click=${(e) => this.openDeleteConfirm(e, 'self')}>Delete</button>`
-          : html`<button class="action-btn success" ?disabled=${true}>Tip</button>`
+        ${caller_principal && caller_principal.toText() != this.interestingReply.owner.toText()? 
+        html`<button class="action-btn success" ?disabled=${true}>Tip</button>` : null}
+        ${caller_principal
+            ? caller_principal.toText() == this.interestingReply.owner.toText()
+              ? this.interestingReply.id == this.activeThread.id && 'ICRC_2' in this.activeThread.auth
+                ? this.deletePostBtn('own paid thread') 
+                : this.deletePostBtn('own post')
+              : this.interestingReply.owner.isAnonymous()
+                ? null // deleted post
+                : caller_principal.toText() == this.activeThread.owner.toText() && 'ICRC_2' in this.activeThread.auth && 'None' in this.interestingReply.auth
+                  ? this.deletePostBtn('other free post') 
+                  : null // free thread owner cannot delete other post
+            : null // not logged in
         }
-        ${caller_principal && caller_principal.toText() == this.activeThread.owner.toText() && 'ICRC_2' in this.activeThread.auth && !this.interestingReply.owner.isAnonymous() && this.interestingReply.owner.toText() != caller_principal.toText() && 'None' in this.interestingReply.auth ? html`<button class="action-btn failed" @click=${(e) => this.openDeleteConfirm(e, 'thread_owner')}>Remove</button>` : null}
       </div>
     </div>
     ` : null;
@@ -1460,16 +1474,17 @@ class App {
     </div>
     <div class="drawer delete-confirm slide-in-up">
       <p>
-        <strong>Confirm ${delete_type == 'self' ? 'Delete Post' : 'Remove Reply'}?</strong><br>
+        <strong>Confirm Delete ${delete_type == 'own post' ? 'Post' : delete_type == 'own paid thread'? 'Paid Thread Post' : 'Free Reply'}?</strong><br>
         <small>
-          ${delete_type == 'self' 
-            ? "This will permanently delete your post. This action cannot be undone. Do you want to continue?" 
-            : "As the thread owner, you can remove this reply. Please do this only if the reply is spam or violates any law."}
+          ${delete_type == 'other free post'
+            ? "As the owner of this paid thread, you can delete this free reply permanently. Please do so only if it is off-topic, spam or violates the law."
+            : `This will permanently delete your post${delete_type == 'own paid thread' ? ', revoke your ability to delete free replies in this thread, and prevent the thread from being bumped by paid replies' : ''}. This action cannot be undone. Do you want to continue?`
+          }
         </small>
       </p>
       <div class="action-bar">
         <button class="action-btn success" ?disabled=${is_deleting} @click=${(e) => this.closeDeleteConfirm(e)}>No</button>
-        <button class="action-btn failed" ?disabled=${is_deleting} @click=${(e) => this.deletePost(e)}>${is_deleting? html`<span class="spinner"></span> ${delete_type == 'self'? 'Delet':'Remov'}ing...` : html`Yes, ${delete_type == 'self'? 'Delete' : 'Remove'}`}</button>
+        <button class="action-btn failed" ?disabled=${is_deleting} @click=${(e) => this.deletePost(e)}>${is_deleting? html`<span class="spinner"></span> Deleting...` : html`Yes, Delete`}</button>
       </div>
     </div>` : null;
     let withdraw_form = null;
