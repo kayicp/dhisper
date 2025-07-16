@@ -16,7 +16,6 @@ let caller_account_copied = false;
 let caller_account_copy_failed = false;
 
 /*
-todo: change gradient
 todo: check all todos before deploying
 
 todo: inset glow (green success, red fail, blue ongoing)
