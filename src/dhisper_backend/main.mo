@@ -61,9 +61,36 @@ shared (install) actor class Canister(
   metadata := Value.setNat(metadata, Kay4.MAX_TAKE, ?200);
   metadata := Value.setNat(metadata, Kay4.MAX_QUERY_BATCH, ?100);
 
+  /*
   let auth_val : Value.Type = #Map([
-    ("ICRC_2", #ValueMap([(#Principal(Principal.fromText("ryjl3-tyaaa-aaaaa-aaaba-cai")), #Map([("create", #Map([("reply_additional_amount_numerator", #Nat(1)), ("reply_additional_character_denominator", #Nat(1)), ("reply_character_limit", #Nat(1_024)), ("reply_minimum_amount", #Nat(100_000)), ("thread_additional_amount_numerator", #Nat(10)), ("thread_additional_character_denominator", #Nat(1)), ("thread_character_limit", #Nat(256)), ("thread_minimum_amount", #Nat(1_000_000))]))]))])),
-    ("None", #Map([("create", #Map([("reply_character_limit", #Nat(256)), ("reply_cooldown", #Nat(15)), ("thread_character_limit", #Nat(64)), ("thread_cooldown", #Nat(60))]))])),
+    ("ICRC_2", #ValueMap([
+      (#Principal(Principal.fromText("ryjl3-tyaaa-aaaaa-aaaba-cai")), #Map([
+        ("create", #Map([
+          ("reply_additional_amount_numerator", #Nat(1)),
+          ("reply_additional_character_denominator", #Nat(1)),
+          ("reply_character_limit", #Nat(512)),
+          ("reply_minimum_amount", #Nat(100_000)),
+          ("thread_additional_amount_numerator", #Nat(10)),
+          ("thread_additional_character_denominator", #Nat(1)),
+          ("thread_character_limit", #Nat(256)),
+          ("thread_minimum_amount", #Nat(1_000_000)),
+        ])),
+      ])),
+    ])),
+    ("None", #Map([
+      ("create", #Map([
+        ("reply_character_limit", #Nat(256)),
+        ("reply_cooldown", #Nat(15)),
+        ("thread_character_limit", #Nat(128)),
+        ("thread_cooldown", #Nat(60)),
+      ])),
+    ])),
+  ]);
+  */
+
+  let auth_val : Value.Type = #Map([
+    ("ICRC_2", #ValueMap([(#Principal(Principal.fromText("ryjl3-tyaaa-aaaaa-aaaba-cai")), #Map([("create", #Map([("reply_additional_amount_numerator", #Nat(1)), ("reply_additional_character_denominator", #Nat(1)), ("reply_character_limit", #Nat(512)), ("reply_minimum_amount", #Nat(100_000)), ("thread_additional_amount_numerator", #Nat(10)), ("thread_additional_character_denominator", #Nat(1)), ("thread_character_limit", #Nat(256)), ("thread_minimum_amount", #Nat(1_000_000))]))]))])),
+    ("None", #Map([("create", #Map([("reply_character_limit", #Nat(256)), ("reply_cooldown", #Nat(15)), ("thread_character_limit", #Nat(128)), ("thread_cooldown", #Nat(60))]))])),
   ]);
   metadata := Value.insert(metadata, Kay4.AUTHORIZATIONS, auth_val);
 

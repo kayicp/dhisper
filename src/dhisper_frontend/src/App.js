@@ -16,20 +16,18 @@ let caller_account_copied = false;
 let caller_account_copy_failed = false;
 
 /*
-todo: show how much extra chars
-todo: provide clarity for post errors
-todo: rethink fee schedule
+todo: change gradient
+todo: check all todos before deploying
 
+todo: inset glow (green success, red fail, blue ongoing)
 todo: add cooldown timer
 todo: url pathways
-todo: change gradient 
 todo: label "REMOVED by MOD"
 todo: dont show deleted thread
 todo: start 2x3 keypad, each button will open their own pane (balance, approval, etc.) 
 todo: put thread details in comment panel
 todo: replace css animation with css transition
 todo: replace input with textarea
-todo: whitespace cleaner
 todo: long text cut-off with "..."
 todo: optimistic rendering
 todo: cache threads/replies 
@@ -757,7 +755,7 @@ class App {
           : html`<br>• <strong>Gain attention</strong> - paid replies bump your thread to the top<br>• <strong>Own the space</strong> - delete free replies in your thread`}` },
         { amount: token_fee, msg: `Payment fee: ${normalizeNumber(Number(token_fee) / token_power)} ${token_symbol}`, submsg: `Covers the small cost of transferring your token`},
         { amount: require_approval ? token_fee : BigInt(0), msg: `Payment Approval fee: ${normalizeNumber(Number(token_fee) / token_power)} ${token_symbol}`, submsg: `Allows Dhisper to deduct the posting fee automatically for you`},
-        { amount: extra_cost, msg: `Extra characters fee: ${normalizeNumber(Number(extra_cost) / token_power)} ${token_symbol}`, submsg: `You exceed ${fee_create.character_limit} characters; either trim it, or pay a little extra` },
+        { amount: extra_cost, msg: `Extra characters fee: ${normalizeNumber(Number(extra_cost) / token_power)} ${token_symbol}`, submsg: `You exceed ${fee_create.character_limit} character limit; either trim the extra ${extra_chars} characters, or pay for them` },
       ];
       if (!is_seeing_cost) {
         is_seeing_cost = true;
@@ -794,7 +792,27 @@ class App {
       is_paying = false;
       is_posting = false;
       if ('Err' in create_post_res) {
-        this.errPopup("Create Post Error", create_post_res.Err);
+        if ('GenericError' in create_post_res.Err) {
+          this.showPopup('Creating Post Failed', create_post_res.Err.GenericError.message);
+        } else if ('ContentTooLarge' in create_post_res.Err) {
+          this.showPopup(`Post's Content Too Long`, html`Your post has ${create_post_res.Err.ContentTooLarge.current_size} characters, but the free limit is ${create_post_res.Err.ContentTooLarge.maximum_size}.<br><br>
+          <i><strong>Want more space?</strong> Post up to ${fee_create.character_limit} characters by paying a small fee (${normalizeNumber(Number(total_cost) / token_power)} ${token_symbol}).</i>`, 
+          // [{ 
+          //   label: 'Close', color: '', click: (e) => this.closePopup(e) 
+          // }, {
+          //   label: 'Pay', color: 'success', click: (e) => {
+          //     this.closePopup(e);
+          //     is_seeing_cost = true;
+          //     is_paying = true;
+          //     is_trying = false;
+          //     this.createNewPost(e);
+          //   }
+          // }]
+          );
+        } else if ('TemporarilyUnavailable' in create_post_res.Err) {
+          this.showPopup('Too Slow!', html`Somebody else just claimed the free slot. You can try again ${timeUntil(new Date(Number(create_post_res.Err.TemporarilyUnavailable.available_time) / 1000000))}.<br><br>
+          <i><strong>Skip the wait and competition</strong>. Post instantly by paying a small fee (${normalizeNumber(Number(total_cost) / token_power)} ${token_symbol}).</i>`);
+        } else this.errPopup("Create Post Error", create_post_res.Err);
       } else {
         this.closeCompose(e);
         if (this.activeThread) {
@@ -1479,7 +1497,7 @@ class App {
         <small>
           ${delete_type == 'other free post'
             ? "As the owner of this paid thread, you can delete this free reply permanently. Please do so only if it is off-topic, spam or violates the law."
-            : `This will permanently delete your post${delete_type == 'own paid thread' ? ', revoke your ability to delete free replies in this thread, and prevent the thread from being bumped by paid replies' : ''}. This action cannot be undone. Do you want to continue?`
+            : `This will permanently delete your post${delete_type == 'own paid thread' ? ', revoke your ability to delete free replies in this thread, and prevent the thread from being bumped to the top by paid replies' : ''}. This action cannot be undone. Do you want to continue?`
           }
         </small>
       </p>
