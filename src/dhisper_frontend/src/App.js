@@ -16,7 +16,7 @@ let caller_account_copied = false;
 let caller_account_copy_failed = false;
 
 /*
-todo: check all todos before deploying
+todo: check all todos before deployingpp
 
 todo: inset glow (green success, red fail, blue ongoing)
 todo: add cooldown timer
@@ -489,7 +489,7 @@ class App {
 
     getAuthSchedule();
     this.setupScroll();
-    // this.setupIdentity(); //todo: enable this
+    this.setupIdentity();
     this.renderPosts();
     this.getPosts();
   }
@@ -553,6 +553,7 @@ class App {
       if (this.isSliding) return;
       if (is_composing_post) return;
       if (is_comments_open) return;
+      if (is_start_open) return;
   
       if (e.deltaY > 0 && this.currentIndex < this.posts.length - 1) {
         this.startSlide(this.currentIndex + 1, 'up');
@@ -576,6 +577,7 @@ class App {
       if (this.isSliding) return;
       if (is_composing_post) return;
       if (is_comments_open) return;
+      if (is_start_open) return;
       touchEndX = e.changedTouches[0].clientX;
       touchEndY = e.changedTouches[0].clientY;
       const deltaX = touchStartX - touchEndX;

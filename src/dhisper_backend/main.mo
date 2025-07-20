@@ -19,13 +19,12 @@ import Queue "../util/motoko/StableCollections/Queue";
 // todo: background process
 // todo: rename modifications
 
-// todo: enable this when deploying to mainnet
-// (
-//   with migration = func(_ : { var owners : RBTree.RBTree<Kay2.Identity, RBTree.RBTree<Nat, ()>> }) : {} {
-//     // discard owners
-//     {};
-//   }
-// )
+(
+  with migration = func(_ : { var posts : RBTree.RBTree<Nat, Kay4.Post> }) : {} {
+    // discard owners
+    {};
+  }
+)
 shared (install) actor class Canister(
   deploy : {
     #Init : { kay1 : Kay1.Init; kay2 : Kay2.Init };
@@ -36,8 +35,6 @@ shared (install) actor class Canister(
   stable var metadata : Value.Metadata = RBTree.empty();
   stable var logs = Queue.empty<Text>();
   stable var threads = RBTree.empty<Nat, RBTree.RBTree<Nat, ()>>();
-  // stable var owners = RBTree.empty<Kay2.Identity, RBTree.RBTree<Nat, ()>>();
-  stable var posts : Kay4.Posts = RBTree.empty();
   stable var posts2 : Kay4.Posts2 = RBTree.empty();
   stable var bumps = RBTree.empty<Nat, Nat>(); // PostId, ThreadId
   stable var post_id = 0;
@@ -80,7 +77,7 @@ shared (install) actor class Canister(
     ("None", #Map([
       ("create", #Map([
         ("reply_character_limit", #Nat(256)),
-        ("reply_cooldown", #Nat(15)),
+        ("reply_cooldown", #Nat(30)),
         ("thread_character_limit", #Nat(128)),
         ("thread_cooldown", #Nat(60)),
       ])),
@@ -90,29 +87,29 @@ shared (install) actor class Canister(
 
   let auth_val : Value.Type = #Map([
     ("ICRC_2", #ValueMap([(#Principal(Principal.fromText("ryjl3-tyaaa-aaaaa-aaaba-cai")), #Map([("create", #Map([("reply_additional_amount_numerator", #Nat(1)), ("reply_additional_character_denominator", #Nat(1)), ("reply_character_limit", #Nat(512)), ("reply_minimum_amount", #Nat(100_000)), ("thread_additional_amount_numerator", #Nat(10)), ("thread_additional_character_denominator", #Nat(1)), ("thread_character_limit", #Nat(256)), ("thread_minimum_amount", #Nat(1_000_000))]))]))])),
-    ("None", #Map([("create", #Map([("reply_character_limit", #Nat(256)), ("reply_cooldown", #Nat(15)), ("thread_character_limit", #Nat(128)), ("thread_cooldown", #Nat(60))]))])),
+    ("None", #Map([("create", #Map([("reply_character_limit", #Nat(256)), ("reply_cooldown", #Nat(30)), ("thread_character_limit", #Nat(128)), ("thread_cooldown", #Nat(60))]))])),
   ]);
   metadata := Value.insert(metadata, Kay4.AUTHORIZATIONS, auth_val);
 
   // migrate
-  for ((p_id, p1) in RBTree.entries(posts)) {
-    // post1 to post2
-    let p2 : Kay4.Post2 = { p1 with tips = RBTree.empty(); report = null };
-    posts2 := RBTree.insert(posts2, Nat.compare, p_id, p2);
+  // for ((p_id, p1) in RBTree.entries(posts)) {
+  //   // post1 to post2
+  //   let p2 : Kay4.Post2 = { p1 with tips = RBTree.empty(); report = null };
+  //   posts2 := RBTree.insert(posts2, Nat.compare, p_id, p2);
 
-    // register each post id to owners
-    // for ((_, p1_owners) in RBTree.entries(p1.owners_versions)) {
-    //   for ((owner, _) in RBTree.entries(p1_owners)) {
-    //     var owner_posts = switch (RBTree.get(owners, Kay2.compareIdentity, owner)) {
-    //       case (?found) found;
-    //       case _ RBTree.empty();
-    //     };
-    //     owner_posts := RBTree.insert(owner_posts, Nat.compare, p_id, ());
-    //     owners := RBTree.insert(owners, Kay2.compareIdentity, owner, owner_posts);
-    //   };
-    // };
-  };
-  posts := RBTree.empty();
+  //   // register each post id to owners
+  //   // for ((_, p1_owners) in RBTree.entries(p1.owners_versions)) {
+  //   //   for ((owner, _) in RBTree.entries(p1_owners)) {
+  //   //     var owner_posts = switch (RBTree.get(owners, Kay2.compareIdentity, owner)) {
+  //   //       case (?found) found;
+  //   //       case _ RBTree.empty();
+  //   //     };
+  //   //     owner_posts := RBTree.insert(owner_posts, Nat.compare, p_id, ());
+  //   //     owners := RBTree.insert(owners, Kay2.compareIdentity, owner, owner_posts);
+  //   //   };
+  //   // };
+  // };
+  // posts := RBTree.empty();
 
   func log(t : Text) = logs := Kay1.log(logs, t);
   public shared query func kay1_logs() : async [Text] = async Queue.arrayTail(logs);
@@ -125,7 +122,7 @@ shared (install) actor class Canister(
     // todo: uncomment these
     // metrics := Kay2.getMetrics(metrics, RBTree.size(owners));
     // metrics := Kay3.getMetrics(metrics, files);
-    metrics := Kay4.getMetrics(metrics, threads, posts, posts2);
+    metrics := Kay4.getMetrics(metrics, threads, posts2);
     RBTree.array(metrics);
   };
 

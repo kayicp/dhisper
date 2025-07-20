@@ -311,9 +311,8 @@ module {
 	};
 
 	public type Threads = RBTree.RBTree<Nat, RBTree.RBTree<Nat, ()>>;
-	public func getMetrics(metrics : Value.Metadata, threads : Threads, posts : Posts, posts2 : Posts2) : Value.Metadata {
+	public func getMetrics(metrics : Value.Metadata, threads : Threads, posts2 : Posts2) : Value.Metadata {
 		var m = Value.insert(metrics, "kay4:threads_size", #Nat(RBTree.size(threads)));
-		m := Value.insert(m, "kay4:old_posts_size", #Nat(RBTree.size(posts)));
 		m := Value.insert(m, "kay4:posts_size", #Nat(RBTree.size(posts2)));
 		m;
 	};
