@@ -31,12 +31,13 @@ stable var metadata = RBTree.empty<Text, ICRC_16.Value>();
 
 // map the post id to post object
 stable var posts = RBTree.empty<Nat, Post>();
+stable var post_id = 0; // to increment each post
 
 // map the thread's post id to replies' post ids
 stable var threads = RBTree.empty<Nat, RBTree.RBTree<Nat, ()>>();
 
-stable var bumps = RBTree.empty<Nat, Nat>(); // PostId, ThreadId
-stable var post_id = 0;
+// map bumping reply to their thread to track visibility
+stable var bumps = RBTree.empty<Nat, Nat>(); // PostId -> ThreadId
 ```
 
 ---
