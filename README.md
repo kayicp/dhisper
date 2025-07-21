@@ -1,44 +1,54 @@
 # Dhisper
 
-**Dhisper** is a decentralized message board protocol built on the Internet Computer, designed to support thread-based discussions with fine-grained ownership, authorization, and metadata control. Its primary functionality allows users to create threads, post replies, query content, and manage ownership or authorization; all on-chain.
+**Dhisper** is a free-to-use Web3 thread-based discussion platform, prioritizing on user experience. Both frontend and backend is hosted on [the Internet Computer](internetcomputer.org).
 
-Posts and threads can be paginated, queried by timestamp or bump order, and selectively deleted by their owners. It’s built for communities that need both openness and access control.
+A live demo is available at: https://loxja-3yaaa-aaaan-qz3ha-cai.icp0.io/
 
-A live demo is available at: [Dhisper's frontend canister](https://loxja-3yaaa-aaaan-qz3ha-cai.icp0.io/)
-
-> 📸 Screenshots and demo videos coming soon.
+A video in action: https://youtu.be/40pLkVNUWbM?t=115
 
 ---
 
 ## Introduction
 
-Dhisper is a decentralized discussion engine for open communities, forums, and apps that require trustless ownership of user content. It supports creation and deletion of posts, full authorization control, and efficient paginated queries; all stored immutably on-chain.
+Dhisper is a place for people tired of chaotic social feeds to have calm, focused conversations one topic at a time.
 
 Highlights:
 
-* **Decentralized Ownership**: Each post or reply has identity-based ownership with optional subaccount support.
-* **Structured Threads & Replies**: Supports nested threads with max-size constraints, timestamps, and bump tracking.
-* **Fine-Grained Deletion**: Posts can be deleted only by thread or post owners under defined rules.
-* **Batch Queries**: Optimized endpoints allow bulk-fetching timestamps, owners, and authorizations for frontend efficiency.
-* **Metadata-Driven Limits**: Max replies, threads, pagination sizes are configurable through metadata values.
+* **Explore one thread at a time**, allowing users to focus on reading, instead of being bombarded with tons of texts on their screen like other platforms. 
+* **Mobile-first thumb-friendly buttons** to make users feel comfortable when using it on small devices, instead of some buttons being at the very top causing users to make awkward finger movements just to click them like on the other platforms. 
+* **Anti-noise** as only one thread can be created per minute, and one reply can be created per 30 seconds per thread.  
+* **Free to use** unlike many web3 social platforms. 
+* **Immediately use it** as there are no landing page.
+* **No login required** to browse the contents, but to post one have to login via Internet Identity.
+* **Thread bumping to the top** for the owner of a paid thread each time they receive a paid reply, to gain visibility.
+* **Moderation power per thread** for the owner of a paid thread to delete free replies within their thread.
 
-Here’s an example of the system’s architectural flow:
+The backend architecture is nothing fancy as most work is on the UX/UI:
 
-![Dhisper Architecture](local-workflow.png)
+```motoko
+// store the settings such as cooldown duration and 
+stable var metadata = RBTree.empty<Text, ICRC_16.Value>();
+
+// map the post id to post object
+stable var posts = RBTree.empty<Nat, Post>();
+
+// map the thread's post id to replies' post ids
+stable var threads = RBTree.empty<Nat, RBTree.RBTree<Nat, ()>>();
+
+stable var bumps = RBTree.empty<Nat, Nat>(); // PostId, ThreadId
+stable var post_id = 0;
+```
 
 ---
 
 ## Installation
 Step-by-step guide to get a copy of the project up and running locally for development and testing.
 
-### Install
-A step-by-step guide to installing the project, including necessary configuration etc.
-
 ```bash
 $ git clone git@github.com:kayicp/dhisper.git
 $ cd dhisper
 $ npm install
-$ bash deploy-local.sh
+$ bash deploy-local.sh # to deploy the token too
 ```
 
 ## Usage
@@ -82,7 +92,7 @@ Further information on the backend architecture can be found in the [Design Docu
 - [ ] Backend/Frontend - Reputation scoring
 
 ## License
-This project is licensed under the MIT license, see LICENSE.md for details. See CONTRIBUTE.md for details about how to contribute to this project. 
+No license (as this repo is only made public for the ICP Grant comittee)
 
 ## Acknowledgements
 - DFINITY

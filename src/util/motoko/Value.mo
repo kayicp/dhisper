@@ -9,11 +9,9 @@ import Nat "mo:base/Nat";
 import Int "mo:base/Int";
 import Bool "mo:base/Bool";
 import Iter "mo:base/Iter";
-import Hasher "SHA2";
 
 import Account "ICRC-1/Account";
 import RBTree "StableCollections/RedBlackTree/RBTree";
-import QueueLeb128 "QueueLEB128";
 import Queue "StableCollections/Queue";
 
 module {
@@ -412,63 +410,5 @@ module {
         case _ [owner];
       }
     );
-  };
-
-  // todo: revert to use digest
-  public func hash(val : Type) : Blob {
-    var q = Queue.empty<Iter.Iter<Nat8>>();
-    switch val {
-      case (#Nat n) q := Queue.insertHead(q, QueueLeb128.iterNat(n));
-      case (#Int i) q := Queue.insertHead(q, QueueLeb128.iterInt(i));
-      case (#Text t) q := Queue.insertHead(q, Text.encodeUtf8(t).vals());
-      case (#Blob b) q := Queue.insertHead(q, b.vals());
-      case (#Array arr) for (v in arr.vals()) q := Queue.insertHead(q, hash(v).vals());
-      case (#Map map) {
-        var hashes = RBTree.empty<Blob, Blob>();
-        for ((k, v) in map.vals()) {
-          let keyHash = Hasher.sha256([Text.encodeUtf8(k).vals()].vals());
-          let valueHash = hash(v);
-          hashes := RBTree.insert(hashes, Blob.compare, keyHash, valueHash);
-        };
-        // hashes are already sorted thru Blob.compare
-        for ((kh, vh) in RBTree.entries(hashes)) {
-          q := Queue.insertHead(q, kh.vals());
-          q := Queue.insertHead(q, vh.vals());
-        };
-      };
-      case (#Bool b) q := Queue.insertHead(q, QueueLeb128.iterNat(if (b) 1 else 0));
-      case (#Principal p) q := Queue.insertHead(q, Principal.toBlob(p).vals());
-      case (#ValueMap map) {
-        var hashes = RBTree.empty<Blob, Blob>();
-        for ((k, v) in map.vals()) {
-          let keyHash = hash(k);
-          let valueHash = hash(v);
-          hashes := RBTree.insert(hashes, Blob.compare, keyHash, valueHash);
-        };
-        // hashes are already sorted thru Blob.compare
-        for ((kh, vh) in RBTree.entries(hashes)) {
-          q := Queue.insertHead(q, kh.vals());
-          q := Queue.insertHead(q, vh.vals());
-        };
-      };
-    };
-    Hasher.sha256(Queue.iterTail(q));
-  };
-
-  // todo: revert to use digest
-  public func hashMeta(meta_iter : { next() : ?(Text, Type) }) : Blob {
-    var hashes = RBTree.empty<Blob, Blob>();
-    for ((k, v) in meta_iter) {
-      let keyHash = Hasher.sha256([Text.encodeUtf8(k).vals()].vals());
-      let valueHash = hash(v);
-      hashes := RBTree.insert(hashes, Blob.compare, keyHash, valueHash);
-    };
-    // hashes are already sorted thru Blob.compare
-    var q = Queue.empty<Iter.Iter<Nat8>>();
-    for ((kh, vh) in RBTree.entries(hashes)) {
-      q := Queue.insertHead(q, kh.vals());
-      q := Queue.insertHead(q, vh.vals());
-    };
-    Hasher.sha256(Queue.iterTail(q));
   };
 };

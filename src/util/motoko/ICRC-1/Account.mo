@@ -6,7 +6,6 @@ import Principal "mo:base/Principal";
 import Text "mo:base/Text";
 
 import Management "../Management";
-import SHA2 "../SHA2";
 
 module {
 	public type Pair = { owner : Principal; subaccount : ?Blob };
@@ -22,20 +21,6 @@ module {
 	// public func equal(a : Identifier, b : Identifier) : Bool = a.hash == b.hash;
 
 	public let default_subaccount : [Nat8] = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
-
-	/// Return the account identifier of the Principal.
-	public func fromPrincipal({ owner; subaccount } : Pair) : Identifier {
-		let sa : [Nat8] = switch subaccount {
-			case (?found) Blob.toArray(found);
-			case _ default_subaccount;
-		};
-		let tag : [Nat8] = [10, 97, 99, 99, 111, 117, 110, 116, 45, 105, 100]; // b"\x0Aaccount-id"
-		let digest = SHA2.SHA224();
-		digest.writeIter(tag.vals());
-		digest.writeIter(Principal.toBlob(owner).vals());
-		digest.writeIter(sa.vals()); // sub account
-		{ hash = digest.sum() };
-	};
 
 	public func default() : Pair = {
 		owner = Management.principal();

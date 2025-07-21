@@ -7,7 +7,6 @@ import Order "mo:base/Order";
 import Nat "mo:base/Nat";
 import RBTree "../StableCollections/RedBlackTree/RBTree";
 import Value "../Value";
-import Hasher "../SHA2";
 
 module {
 	public let DEFAULT_TAKE = "kay2:default_take_value";
@@ -81,7 +80,6 @@ module {
 			#BadFee : { expected_fee : Nat };
 			#TransferFromFailed : ICRC_1_Types.TransferFromError;
 		};
-
 	};
 	public type Locker = { caller : Principal; authorization : Authorization };
 	public func lockerIdentity({ caller; authorization } : Locker) : Identity = switch authorization {
@@ -99,74 +97,6 @@ module {
 	};
 	public func equalIdentity(ao : Identity, bo : Identity) : Bool = compareIdentity(ao, bo) == #equal;
 
-	public func hashIdentity(owner : Identity) : Blob {
-		var hashes = RBTree.empty<Blob, Blob>();
-		func register(k : Text, v : Value.Type) {
-			let keyHash = Hasher.sha256([Text.encodeUtf8(k).vals()].vals());
-			let valueHash = Value.hash(v);
-			hashes := RBTree.insert(hashes, Blob.compare, keyHash, valueHash);
-		};
-		switch owner {
-			case (#ICRC_1 o) {
-				register("id_type", #Text "ICRC_1");
-				register("owner", #Principal(o.owner));
-				switch (o.subaccount) {
-					case (?found) register("subaccount", #Blob found);
-					case _ ();
-				};
-			};
-		};
-		Hasher.sha256blobMap(RBTree.entries(hashes));
-	};
-	public func hashAuth(auth : Authorized) : Blob {
-		var hashes = RBTree.empty<Blob, Blob>();
-		func register(k : Text, v : Value.Type) {
-			let keyHash = Hasher.sha256([Text.encodeUtf8(k).vals()].vals());
-			let valueHash = Value.hash(v);
-			hashes := RBTree.insert(hashes, Blob.compare, keyHash, valueHash);
-		};
-		switch auth {
-			case (#ICRC_1 o) {
-				register("id_type", #Text "ICRC_1");
-				register("owner", #Principal(o.owner));
-				switch (o.subaccount) {
-					case (?found) register("subaccount", #Blob found);
-					case _ ();
-				};
-				register("canister_id", #Principal(o.canister_id));
-				register("minimum_balance", #Nat(o.minimum_balance));
-			};
-			case (#ICRC_7 o) {
-				register("id_type", #Text "ICRC_7");
-				register("owner", #Principal(o.owner));
-				switch (o.subaccount) {
-					case (?found) register("subaccount", #Blob found);
-					case _ ();
-				};
-				register("canister_id", #Principal(o.canister_id));
-				register("token_id", #Nat(o.token_id));
-			};
-			case (#ICRC_2 o) {
-				register("id_type", #Text "ICRC_2");
-				register("owner", #Principal(o.owner));
-				switch (o.subaccount) {
-					case (?found) register("subaccount", #Blob found);
-					case _ ();
-				};
-				register("canister_id", #Principal(o.canister_id));
-				register("xfer", #Nat(o.xfer));
-			};
-			case (#None o) {
-				register("id_type", #Text "None");
-				register("owner", #Principal(o.owner));
-				switch (o.subaccount) {
-					case (?found) register("subaccount", #Blob found);
-					case _ ();
-				};
-			};
-		};
-		Hasher.sha256blobMap(RBTree.entries(hashes));
-	};
 	public func identityValue(id : Identity) : Value.Type = switch id {
 		case (#ICRC_1 { owner; subaccount }) {
 			let x = switch subaccount {
