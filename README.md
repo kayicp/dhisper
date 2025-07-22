@@ -80,6 +80,7 @@ Further information on the backend architecture can be found in the [Design Docu
 - [x] Frontend - wallet (balance, approval, withdraw, revoke)
 - [x] Frontend - delete UX
 - [x] Frontend - threads sorter (recently created, recently bumped)
+- [ ] Backend/Frontend - Anonymous (2vxsx-fae) posting, login users can delete their postings
 - [ ] Backend/Frontend - Tests
 - [ ] Backend - Temporary Admin
 - [ ] Backend - Fee collection

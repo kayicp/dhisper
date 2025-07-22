@@ -13,14 +13,14 @@
 
 ```motoko
 stable var metadata : RBTree<Text, Value.Type>
-stable var posts : RBTree<PostId, Kay4.Post2>
+stable var posts : RBTree<PostId, Post2>
 stable var threads : RBTree<ThreadId, RBTree<PostId, ()>>
 stable var bumps : RBTree<PostId, ThreadId>
 stable var post_id : Nat
 ```
 
 * **`metadata`**: Global metadata for the canister.
-* **`posts`**: Mapping from post ID to rich post object (`Kay4.Post2`) with versioning.
+* **`posts`**: Mapping from post ID to rich post object (`Post2`) with versioning.
 * **`threads`**: Mapping from thread ID to set of post IDs (replies).
 * **`bumps`**: Mapping from latest reply ID of the thread to the thread ID.
 * **`post_id`**: Auto-incrementing post ID tracker.
@@ -29,11 +29,11 @@ stable var post_id : Nat
 
 ## Data Models
 
-### 1. **Post Model** (`Kay4.Post2`)
+### 1. **Post Model** (`Post2`)
 
 ```motoko
 type Must2 = {
-  authorization : Kay2.Authorized;
+  authorization : Authorized;
   timestamp : Nat64;
 };
 public type Post2 = {
@@ -41,7 +41,7 @@ public type Post2 = {
   versions : RBTree.RBTree<VersionId, Must2>;
   content_versions : RBTree.RBTree<VersionId, Text>;
   files_versions : RBTree.RBTree<VersionId, RBTree.RBTree<Text, ()>>;
-  owners_versions : RBTree.RBTree<VersionId, RBTree.RBTree<Kay2.Identity, ()>>;
+  owners_versions : RBTree.RBTree<VersionId, RBTree.RBTree<Identity, ()>>;
   metadata_versions : RBTree.RBTree<VersionId, Value.Metadata>;
   tips : RBTree.RBTree<TipId, ()>;
   report : ?ReportId;
@@ -51,7 +51,7 @@ public type Post2 = {
 * **`Must2`**: Stores the authorization and timestamp of each new version of the Post.
 * **`Post2`**: Tracks each versioned properties, along with the thread it's replying to (if any), the tips it received (if any), and the report (if any). 
 
-### 2. **Authorization Model** (`Kay2.Authorization`, `Kay2.Authorized`)
+### 2. **Authorization Model** (`Authorization`, `Authorized`)
 
 ```motoko
 type Authorization = {
@@ -69,7 +69,7 @@ type Authorized = {
 		canister_id : Principal;
 		xfer : Nat; // transfer block id
 	}; 
-	#None : Account.Pair;
+	#None : { owner : Principal; subaccount : ?Blob };
 };
 ```
 Authorization is enforced during mutating operations like `kay4_create`.
@@ -83,7 +83,7 @@ Could support more variants in the future such as `#ICRC_7` to check if caller h
 ### 3. **Identity Model**
 
 ```motoko
-type Kay2.Identity = { #ICRC_1 : Account.Pair }
+type Identity = { #ICRC_1 : { owner : Principal; subaccount : ?Blob } }
 ```
 
 Supports user identities with optional subaccounting for fine-grained access. Could support more variants such as `#ICP : Blob` which is the Account ID Hex, or other identity variants that might exist in the future.
@@ -92,7 +92,7 @@ Supports user identities with optional subaccounting for fine-grained access. Co
 
 ## Update Endpoints
 
-### `shared func kay4_create(arg: Kay4.CreatePostArg): async Result<Nat, Kay4.CreatePostError>`
+### `shared func kay4_create(arg: CreatePostArg): async Result<Nat, CreatePostError>`
 
 The `kay4_create` function allows users to create a new post (either a new thread or a reply to an existing one) in a decentralized forum-like application. It supports two types of access:
 
@@ -129,8 +129,7 @@ The `kay4_create` function allows users to create a new post (either a new threa
 type CreatePostArg = {
   thread: ?Nat,                 // Optional thread ID for replies
   content: Text,                // Main text content of the post
-  files: [Kay3.CreateArg],      // Must be empty for now
-  owners: [Kay2.Identity],      // Must be empty for now
+  owners: [Identity],      // Must be empty for now
   metadata: [(Text, Value.Type)], // Must be empty for now
   authorization: Authorization, // Either None or ICRC_2
 }
@@ -141,7 +140,7 @@ type CreatePostArg = {
 ####  Output
 
 ```motoko
-Result.Type<Nat, Kay4.CreatePostError>
+Result.Type<Nat, CreatePostError>
 ```
 
 Returns:
@@ -249,7 +248,7 @@ Sure! Here's the high-level design description in markdown, starting with the ap
 
 ---
 
-### `shared func kay4_delete(arg : Kay4.DeletePostArg) : async Result.Type<(), Kay4.DeletePostError> `
+### `shared func kay4_delete(arg : DeletePostArg) : async Result.Type<(), DeletePostError> `
 
 The `kay4_delete` function allows authorized users to delete a previously created post (either a thread or a reply). Only **free-tier posts** (`#None` authorization) can be deleted, and only under specific ownership rules.
 
@@ -268,7 +267,7 @@ The `kay4_delete` function allows authorized users to delete a previously create
 ```motoko
 type DeletePostArg = {
   id: Nat;                          // ID of the post to delete
-  authorization: Kay2.Authorization; // Only #None is supported
+  authorization: Authorization; // Only #None is supported
 };
 ```
 
@@ -280,7 +279,7 @@ type DeletePostArg = {
 type DeletePostError = {
   #GenericError : Error.Type;
   #UnknownPost;
-  #Unauthorized : Kay2.Unauthorized;
+  #Unauthorized : Unauthorized;
 };
 ```
 
@@ -317,7 +316,7 @@ type DeletePostError = {
 
 5. **Post Deletion**
 
-   * Calls `Kay4.deletePost()` to create a new version of the post marked as deleted.
+   * Calls `deletePost()` to create a new version of the post marked as deleted.
    * Updates the posts tree with the deleted version using the same post ID.
 
 
@@ -529,7 +528,7 @@ Batch fetches the authorization type for a list of post IDs.
 #### Output
 
 ```motoko
-async [?Kay2.Authorized]
+async [?Authorized]
 ```
 
 #### Use Case
@@ -558,7 +557,7 @@ Useful for rendering creation times of posts without querying them individually.
 
 ---
 
-### `shared query func kay4_owners_of(post_id : Nat, prev : ?Kay2.Identity, take : ?Nat)`
+### `shared query func kay4_owners_of(post_id : Nat, prev : ?Identity, take : ?Nat)`
 
 Paginated fetch of all owners associated with a given post.
 
@@ -571,7 +570,7 @@ Paginated fetch of all owners associated with a given post.
 #### Output
 
 ```motoko
-async [Kay2.Identity]
+async [Identity]
 ```
 
 #### Use Case
