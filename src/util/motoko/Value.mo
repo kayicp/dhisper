@@ -12,7 +12,6 @@ import Iter "mo:base/Iter";
 
 import Account "ICRC-1/Account";
 import RBTree "StableCollections/RedBlackTree/RBTree";
-import Queue "StableCollections/Queue";
 
 module {
   public type Type = {

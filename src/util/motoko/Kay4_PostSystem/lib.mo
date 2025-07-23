@@ -19,6 +19,7 @@ module {
 	// public let MAX_OWNERS = "kay4:max_owners_size";
 	// public let MAX_META = "kay4:max_metadata_size";
 
+	public let MODERATORS = "kay4:moderators";
 	public let FEE_COLLECTORS = "kay4:fee_collectors";
 	public let CREATE_FEE_RATES = "kay4:create_fee_rates";
 	public let DELETE_FEE_RATES = "kay4:delete_fee_rates";

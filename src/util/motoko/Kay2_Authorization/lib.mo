@@ -1,11 +1,9 @@
 import Account "../ICRC-1/Account";
 import ICRC_1_Types "../ICRC-1/Types";
 import Principal "mo:base/Principal";
-import Text "mo:base/Text";
 import Blob "mo:base/Blob";
 import Order "mo:base/Order";
 import Nat "mo:base/Nat";
-import RBTree "../StableCollections/RedBlackTree/RBTree";
 import Value "../Value";
 
 module {
@@ -43,6 +41,7 @@ module {
 		}; // check if user holds any NFT in the collection to create/modify/delete files with weaker limits
 		#ICRC_2 : { subaccount : ?Blob; canister_id : Principal; fee : ?Nat }; // else, user have to pay fee to create/modify/delete files to bypass limits
 		#None : { subaccount : ?Blob }; // free tier
+		#Anonymous;
 	};
 	public type Authorized = {
 		#ICRC_1 : {
@@ -64,6 +63,7 @@ module {
 			xfer : Nat;
 		}; // xfer = paid fee transfer block id
 		#None : Account.Pair;
+		#Anonymous;
 	};
 	public type Unauthorized = {
 		#ICRC_1 : {
@@ -81,13 +81,13 @@ module {
 			#TransferFromFailed : ICRC_1_Types.TransferFromError;
 		};
 	};
-	public type Locker = { caller : Principal; authorization : Authorization };
-	public func lockerIdentity({ caller; authorization } : Locker) : Identity = switch authorization {
-		case (#ICRC_1 { subaccount } or #ICRC_2 { subaccount } or #ICRC_7 { subaccount } or #None { subaccount }) #ICRC_1 {
-			owner = caller;
-			subaccount;
-		};
-	};
+	// public type Locker = { caller : Principal; authorization : Authorization };
+	// public func lockerIdentity({ caller; authorization } : Locker) : Identity = switch authorization {
+	//   case (#ICRC_1 { subaccount } or #ICRC_2 { subaccount } or #ICRC_7 { subaccount } or #None { subaccount }) #ICRC_1 {
+	//     owner = caller;
+	//     subaccount;
+	//   };
+	// };
 	// func rankIdentity(o : Identity) : Nat = switch o {
 	//   case (#ICRC_1 _) 0;
 	// };

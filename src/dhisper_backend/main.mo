@@ -19,17 +19,17 @@ import Queue "../util/motoko/StableCollections/Queue";
 // todo: background process
 // todo: rename modifications
 
-(
-  with migration = func(_ : { var posts : RBTree.RBTree<Nat, Kay4.Post> }) : {} {
-    // discard owners
-    {};
-  }
-)
+// (
+//   with migration = func(_ : { var posts : RBTree.RBTree<Nat, Kay4.Post> }) : {} {
+//     // discard owners
+//     {};
+//   }
+// )
 shared (install) actor class Canister(
-  deploy : {
-    #Init : { kay1 : Kay1.Init; kay2 : Kay2.Init };
-    #Upgrade;
-  }
+  // deploy : {
+  //   #Init : { kay1 : Kay1.Init; kay2 : Kay2.Init };
+  //   #Upgrade;
+  // }
 ) = Self {
   func self() : Principal = Principal.fromActor(Self);
   stable var metadata : Value.Metadata = RBTree.empty();
@@ -39,46 +39,54 @@ shared (install) actor class Canister(
   stable var bumps = RBTree.empty<Nat, Nat>(); // PostId, ThreadId
   stable var post_id = 0;
 
-  switch deploy {
-    case (#Init init) {
-      metadata := Kay1.init(metadata, init.kay1);
-      metadata := Kay2.init(metadata, init.kay2);
-    };
-    case _ ();
-  };
-  metadata := Value.delete(metadata, Kay4.MAX_THREADS);
-  metadata := Value.setNat(metadata, Kay4.MAX_REPLIES, ?200);
-  metadata := Value.delete(metadata, Kay4.MAX_CONTENT);
+  // switch deploy {
+  //   case (#Init init) {
+  //     metadata := Kay1.init(metadata, init.kay1);
+  //     metadata := Kay2.init(metadata, init.kay2);
+  //   };
+  //   case _ ();
+  // };
+  // metadata := Value.delete(metadata, Kay4.MAX_THREADS);
+  // metadata := Value.setNat(metadata, Kay4.MAX_REPLIES, ?200);
+  // metadata := Value.delete(metadata, Kay4.MAX_CONTENT);
 
-  metadata := Value.delete(metadata, Kay4.FEE_COLLECTORS);
-  metadata := Value.delete(metadata, Kay4.CREATE_FEE_RATES);
-  metadata := Value.delete(metadata, Kay4.DELETE_FEE_RATES);
+  // metadata := Value.delete(metadata, Kay4.FEE_COLLECTORS);
+  // metadata := Value.delete(metadata, Kay4.CREATE_FEE_RATES);
+  // metadata := Value.delete(metadata, Kay4.DELETE_FEE_RATES);
 
-  metadata := Value.setNat(metadata, Kay4.DEFAULT_TAKE, ?100);
-  metadata := Value.setNat(metadata, Kay4.MAX_TAKE, ?200);
-  metadata := Value.setNat(metadata, Kay4.MAX_QUERY_BATCH, ?100);
+  // metadata := Value.setNat(metadata, Kay4.DEFAULT_TAKE, ?100);
+  // metadata := Value.setNat(metadata, Kay4.MAX_TAKE, ?200);
+  // metadata := Value.setNat(metadata, Kay4.MAX_QUERY_BATCH, ?100);
 
   /*
   let auth_val : Value.Type = #Map([
+    ("Anonymous", #Map([
+      ("create", #Map([
+        ("reply_character_limit", #Nat(192)), // ((2^7)+(2^8))/2
+        ("reply_cooldown", #Nat(60)),
+        ("thread_character_limit", #Nat(96)), // ((2^6)+(2^7))/2
+        ("thread_cooldown", #Nat(90)),
+      ])),
+    ])),
     ("ICRC_2", #ValueMap([
       (#Principal(Principal.fromText("ryjl3-tyaaa-aaaaa-aaaba-cai")), #Map([
         ("create", #Map([
           ("reply_additional_amount_numerator", #Nat(1)),
           ("reply_additional_character_denominator", #Nat(1)),
-          ("reply_character_limit", #Nat(512)),
+          ("reply_character_limit", #Nat(768)), // ((2^9)+(2^10))/2
           ("reply_minimum_amount", #Nat(100_000)),
           ("thread_additional_amount_numerator", #Nat(10)),
           ("thread_additional_character_denominator", #Nat(1)),
-          ("thread_character_limit", #Nat(256)),
+          ("thread_character_limit", #Nat(384)), // ((2^8)+(2^9))/2
           ("thread_minimum_amount", #Nat(1_000_000)),
         ])),
       ])),
     ])),
     ("None", #Map([
       ("create", #Map([
-        ("reply_character_limit", #Nat(256)),
+        ("reply_character_limit", #Nat(256)), // 2^8
         ("reply_cooldown", #Nat(30)),
-        ("thread_character_limit", #Nat(128)),
+        ("thread_character_limit", #Nat(128)), // 2^7
         ("thread_cooldown", #Nat(60)),
       ])),
     ])),
@@ -86,8 +94,15 @@ shared (install) actor class Canister(
   */
 
   let auth_val : Value.Type = #Map([
-    ("ICRC_2", #ValueMap([(#Principal(Principal.fromText("ryjl3-tyaaa-aaaaa-aaaba-cai")), #Map([("create", #Map([("reply_additional_amount_numerator", #Nat(1)), ("reply_additional_character_denominator", #Nat(1)), ("reply_character_limit", #Nat(512)), ("reply_minimum_amount", #Nat(100_000)), ("thread_additional_amount_numerator", #Nat(10)), ("thread_additional_character_denominator", #Nat(1)), ("thread_character_limit", #Nat(256)), ("thread_minimum_amount", #Nat(1_000_000))]))]))])),
-    ("None", #Map([("create", #Map([("reply_character_limit", #Nat(256)), ("reply_cooldown", #Nat(30)), ("thread_character_limit", #Nat(128)), ("thread_cooldown", #Nat(60))]))])),
+    ("Anonymous", #Map([("create", #Map([("reply_character_limit", #Nat(192)), /* ((2^7)+(2^8))/2 */
+    ("reply_cooldown", #Nat(60)), ("thread_character_limit", #Nat(96)), /* ((2^6)+(2^7))/2 */
+    ("thread_cooldown", #Nat(90))]))])),
+    ("ICRC_2", #ValueMap([(#Principal(Principal.fromText("ryjl3-tyaaa-aaaaa-aaaba-cai")), #Map([("create", #Map([("reply_additional_amount_numerator", #Nat(1)), ("reply_additional_character_denominator", #Nat(1)), ("reply_character_limit", #Nat(768)), /* ((2^9)+(2^10))/2 */
+    ("reply_minimum_amount", #Nat(100_000)), ("thread_additional_amount_numerator", #Nat(10)), ("thread_additional_character_denominator", #Nat(1)), ("thread_character_limit", #Nat(384)), /* ((2^8)+(2^9))/2 */
+    ("thread_minimum_amount", #Nat(1_000_000))]))]))])),
+    ("None", #Map([("create", #Map([("reply_character_limit", #Nat(256)), /* 2^8 */
+    ("reply_cooldown", #Nat(30)), ("thread_character_limit", #Nat(128)), /* 2^7 */
+    ("thread_cooldown", #Nat(60))]))])),
   ]);
   metadata := Value.insert(metadata, Kay4.AUTHORIZATIONS, auth_val);
 
@@ -275,6 +290,59 @@ shared (install) actor class Canister(
 
     let now = Time64.nanos();
     let (authorization, owner) = switch (arg.authorization) {
+      case (#Anonymous) {
+        if (not Principal.isAnonymous(caller)) return Error.text("Caller is not anonymous");
+
+        let anon_key = Kay4.AUTHORIZATIONS # ".Anonymous";
+        let anon_auth = Value.getMap(auth_map, "Anonymous", RBTree.empty());
+        if (RBTree.size(anon_auth) == 0) return Error.text("Metadata `" # anon_key # "` not set properly");
+
+        let create_key = anon_key # ".create";
+        let create_auth = Value.getMap(anon_auth, "create", RBTree.empty());
+        if (RBTree.size(create_auth) == 0) return Error.text("Metadata `" # create_key # "` not set properly");
+
+        let character_limit = Value.getNat(create_auth, key_prefix # "_character_limit", 0);
+        if (character_limit == 0) return Error.text("Metadata `" # create_key # "." # key_prefix # "_character_limit` must be greater than 0");
+        if (content_size > character_limit) return #Err(#ContentTooLarge { current_size = content_size; maximum_size = character_limit });
+
+        let cooldown_duration_seconds = Value.getNat(create_auth, key_prefix # "_cooldown", 0);
+        if (cooldown_duration_seconds == 0) return Error.text("Metadata `" # create_key # "." # key_prefix # "_cooldown` must be greater than 0");
+
+        switch (arg.thread) {
+          case (?op_id) switch (RBTree.get(threads, Nat.compare, op_id)) {
+            case (?thread_replies) label finding_last_anon for ((reply_id, _) in RBTree.entriesReverse(thread_replies)) switch (RBTree.get(posts2, Nat.compare, reply_id)) {
+              case (?found_reply) switch (RBTree.min(found_reply.versions)) {
+                case (?(_, creation)) switch (creation.authorization) {
+                  case (#None _ or #Anonymous) {
+                    let available_time = creation.timestamp + Time64.SECONDS(Nat64.fromNat(cooldown_duration_seconds));
+                    if (now < available_time) return #Err(#TemporarilyUnavailable { current_time = now; available_time });
+                    break finding_last_anon;
+                  };
+                  case _ ();
+                };
+                case _ ();
+              };
+              case _ ();
+            };
+            case _ ();
+          };
+          case _ label finding_last_anon for ((thread_id, _) in RBTree.entriesReverse(threads)) switch (RBTree.get(posts2, Nat.compare, thread_id)) {
+            case (?found_thread) switch (RBTree.min(found_thread.versions)) {
+              case (?(_, creation)) switch (creation.authorization) {
+                case (#None _ or #Anonymous) {
+                  let available_time = creation.timestamp + Time64.SECONDS(Nat64.fromNat(cooldown_duration_seconds));
+                  if (now < available_time) return #Err(#TemporarilyUnavailable { current_time = now; available_time });
+                  break finding_last_anon;
+                };
+                case _ ();
+              };
+              case _ ();
+            };
+            case _ ();
+          };
+        };
+        (#Anonymous, #ICRC_1 { owner = caller; subaccount = null });
+      };
       case (#None auth) {
         let user = { owner = caller; subaccount = auth.subaccount };
         if (not Account.validate(user)) return Error.text("Invalid caller account");
@@ -297,10 +365,10 @@ shared (install) actor class Canister(
         switch (arg.thread) {
           case (?op_id) switch (RBTree.get(threads, Nat.compare, op_id)) {
             case (?thread_replies) label finding_last_free for ((reply_id, _) in RBTree.entriesReverse(thread_replies)) switch (RBTree.get(posts2, Nat.compare, reply_id)) {
-              case (?found_reply) switch (RBTree.max(found_reply.versions)) {
-                case (?(_, max_version)) switch (max_version.authorization) {
+              case (?found_reply) switch (RBTree.min(found_reply.versions)) {
+                case (?(_, creation)) switch (creation.authorization) {
                   case (#None _) {
-                    let available_time = max_version.timestamp + Time64.SECONDS(Nat64.fromNat(cooldown_duration_seconds));
+                    let available_time = creation.timestamp + Time64.SECONDS(Nat64.fromNat(cooldown_duration_seconds));
                     if (now < available_time) return #Err(#TemporarilyUnavailable { current_time = now; available_time });
                     break finding_last_free;
                   };
@@ -310,29 +378,13 @@ shared (install) actor class Canister(
               };
               case _ ();
             };
-            /*
-              // cooldown after last post is too restricting
-              switch (RBTree.max(thread_replies)) {
-                case (?(max_reply, _)) switch (RBTree.get(posts2, Nat.compare, max_reply)) {
-                  case (?found_reply) switch (RBTree.max(found_reply.versions)) {
-                    case (?(_, max_version)) {
-                      let available_time = max_version.timestamp + Time64.SECONDS(Nat64.fromNat(cooldown_duration_seconds));
-                      if (now < available_time) return #Err(#TemporarilyUnavailable { current_time = now; available_time });
-                    };
-                    case _ ();
-                  };
-                  case _ ();
-                };
-                case _ ();
-              };
-              */
             case _ ();
           };
           case _ label finding_last_free for ((thread_id, _) in RBTree.entriesReverse(threads)) switch (RBTree.get(posts2, Nat.compare, thread_id)) {
-            case (?found_thread) switch (RBTree.max(found_thread.versions)) {
-              case (?(_, max_version)) switch (max_version.authorization) {
+            case (?found_thread) switch (RBTree.min(found_thread.versions)) {
+              case (?(_, creation)) switch (creation.authorization) {
                 case (#None _) {
-                  let available_time = max_version.timestamp + Time64.SECONDS(Nat64.fromNat(cooldown_duration_seconds));
+                  let available_time = creation.timestamp + Time64.SECONDS(Nat64.fromNat(cooldown_duration_seconds));
                   if (now < available_time) return #Err(#TemporarilyUnavailable { current_time = now; available_time });
                   break finding_last_free;
                 };
@@ -342,21 +394,6 @@ shared (install) actor class Canister(
             };
             case _ ();
           };
-          /*
-          switch (RBTree.max(threads)) {
-            case (?(max_thread, _)) switch (RBTree.get(posts2, Nat.compare, max_thread)) {
-              case (?found_thread) switch (RBTree.max(found_thread.versions)) {
-                case (?(_, max_version)) {
-                  let available_time = max_version.timestamp + Time64.SECONDS(Nat64.fromNat(cooldown_duration_seconds));
-                  if (now < available_time) return #Err(#TemporarilyUnavailable { current_time = now; available_time });
-                };
-                case _ ();
-              };
-              case _ ();
-            };
-            case _ ();
-          };
-          */
         };
         (#None user, #ICRC_1 user);
       };
@@ -412,14 +449,13 @@ shared (install) actor class Canister(
         };
         (#ICRC_2 { auth with owner = caller; xfer = transfer_from_id }, #ICRC_1 user);
       };
-      case _ return Error.text("Only None or ICRC-2 authorization is allowed");
+      case _ return Error.text("Only Anonymous, None or ICRC-2 authorization is allowed");
     };
     let new_post_id = post_id;
     let (thread_id, thread_id_opt, thread_replies, bumpable) = switch (arg.thread) {
       case (?op_id) switch (RBTree.get(threads, Nat.compare, op_id)) {
         case (?replies) {
           let should_bump = switch authorization {
-            case (#None _) false;
             case (#ICRC_2 _) {
               let is_paid_thread = switch (RBTree.get(posts2, Nat.compare, op_id)) {
                 case (?found_thread) switch (RBTree.max(found_thread.versions)) {
@@ -450,6 +486,7 @@ shared (install) actor class Canister(
               };
               is_paid_thread;
             };
+            case _ false; // anon or free dont bump
           };
           (op_id, ?op_id, RBTree.insert(replies, Nat.compare, new_post_id, ()), should_bump);
         };
@@ -483,17 +520,27 @@ shared (install) actor class Canister(
     let authorization = switch (arg.authorization) {
       case (#None auth) {
         let user = { owner = caller; subaccount = auth.subaccount };
-        let caller_is_post_owner = RBTree.has(Kay4.getOwners(the_post), Kay2.compareIdentity, #ICRC_1 user);
-        switch (the_post.thread, caller_is_post_owner) {
-          case (?reply_to, false) switch (RBTree.get(posts2, Nat.compare, reply_to)) {
-            case (?found_thread) if (RBTree.has(Kay4.getOwners(found_thread), Kay2.compareIdentity, #ICRC_1 user)) switch (Kay4.getAuthorization(found_thread)) {
-              case (?(#ICRC_2 _)) ();
-              case _ return Error.text("Free thread owners cannot delete other posts");
-            };
+        if (not Account.validate(user)) return Error.text("Invalid caller account");
+
+        let mods = Value.getUniquePrincipals(metadata, Kay4.MODERATORS, RBTree.empty());
+        if (RBTree.has(mods, Principal.compare, caller)) {
+          // caller is a mod
+        } else if (RBTree.has(Kay4.getOwners(the_post), Kay2.compareIdentity, #ICRC_1 user)) {
+          // caller is the owner of the post
+        } else switch (the_post.thread) {
+          // caller is not mod nor owner of post
+          case (?reply_to) switch (RBTree.get(posts2, Nat.compare, reply_to)) {
+            case (?found_thread) if (RBTree.has(Kay4.getOwners(found_thread), Kay2.compareIdentity, #ICRC_1 user)) {
+              // caller is owner of thread
+              switch (Kay4.getAuthorization(found_thread), Kay4.getAuthorization(the_post)) {
+                case (?(#ICRC_2 _), (?(#None _) or ?#Anonymous)) (); // paid thread owners can delete free & anon posts
+                case (?(#None _), ?#Anonymous) (); // free thread owners can delete anon posts
+                case _ return Error.text("Thread owner does not have the authorization to delete this post");
+              };
+            } else return Error.text("Caller is not the thread owner");
             case _ return Error.text("Caller is not the post owner");
           };
-          case (null, false) return Error.text("Caller is not the thread owner");
-          case _ ();
+          case _ return Error.text("Caller is not the post owner");
         };
         let post_content = switch (Kay4.getContent(the_post)) {
           case (?found) found;
