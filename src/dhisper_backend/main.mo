@@ -63,9 +63,9 @@ shared (install) actor class Canister(
     ("Anonymous", #Map([
       ("create", #Map([
         ("reply_character_limit", #Nat(192)), // ((2^7)+(2^8))/2
-        ("reply_cooldown", #Nat(60)),
+        ("reply_cooldown", #Nat(20)),
         ("thread_character_limit", #Nat(96)), // ((2^6)+(2^7))/2
-        ("thread_cooldown", #Nat(90)),
+        ("thread_cooldown", #Nat(25)),
       ])),
     ])),
     ("ICRC_2", #ValueMap([
@@ -85,9 +85,9 @@ shared (install) actor class Canister(
     ("None", #Map([
       ("create", #Map([
         ("reply_character_limit", #Nat(256)), // 2^8
-        ("reply_cooldown", #Nat(30)),
+        ("reply_cooldown", #Nat(10)),
         ("thread_character_limit", #Nat(128)), // 2^7
-        ("thread_cooldown", #Nat(60)),
+        ("thread_cooldown", #Nat(15)),
       ])),
     ])),
   ]);
@@ -95,14 +95,14 @@ shared (install) actor class Canister(
 
   let auth_val : Value.Type = #Map([
     ("Anonymous", #Map([("create", #Map([("reply_character_limit", #Nat(192)), /* ((2^7)+(2^8))/2 */
-    ("reply_cooldown", #Nat(60)), ("thread_character_limit", #Nat(96)), /* ((2^6)+(2^7))/2 */
-    ("thread_cooldown", #Nat(90))]))])),
+    ("reply_cooldown", #Nat(20)), ("thread_character_limit", #Nat(96)), /* ((2^6)+(2^7))/2 */
+    ("thread_cooldown", #Nat(25))]))])),
     ("ICRC_2", #ValueMap([(#Principal(Principal.fromText("ryjl3-tyaaa-aaaaa-aaaba-cai")), #Map([("create", #Map([("reply_additional_amount_numerator", #Nat(1)), ("reply_additional_character_denominator", #Nat(1)), ("reply_character_limit", #Nat(768)), /* ((2^9)+(2^10))/2 */
     ("reply_minimum_amount", #Nat(100_000)), ("thread_additional_amount_numerator", #Nat(10)), ("thread_additional_character_denominator", #Nat(1)), ("thread_character_limit", #Nat(384)), /* ((2^8)+(2^9))/2 */
     ("thread_minimum_amount", #Nat(1_000_000))]))]))])),
     ("None", #Map([("create", #Map([("reply_character_limit", #Nat(256)), /* 2^8 */
-    ("reply_cooldown", #Nat(30)), ("thread_character_limit", #Nat(128)), /* 2^7 */
-    ("thread_cooldown", #Nat(60))]))])),
+    ("reply_cooldown", #Nat(10)), ("thread_character_limit", #Nat(128)), /* 2^7 */
+    ("thread_cooldown", #Nat(15))]))])),
   ]);
   metadata := Value.insert(metadata, Kay4.AUTHORIZATIONS, auth_val);
 

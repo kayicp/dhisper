@@ -63,16 +63,6 @@ const reply_input_pitches = [
   { header: "", body: "Keep the chain alive.", placeholder: "Make the thread longer..." },
 ];
 
-const sign_in_pitches = [
-  { header: "AI is flooding the Internet.", body: "You found the high ground. You found us." },
-  { header: "Algorithms ruined the Internet.", body: "Here, your words reach everyone, not the void." },
-  { header: "Welcome to the New Internet.", body: "No vanity. No followers. Just people's thoughts." },
-  { header: "Every word has an author.", body: "You wrote it. Now own it." },
-  { header: "We've been expecting you.", body: "Join us to reach everyone." },
-  { header: "Welcome to the New Internet.", body: "Join the rest of the pioneers." },
-  { header: "Built different?", body: "So is this place. Let's get along." },
-];
-
 const top_up_pitches = [
   { header: "Top-up now. Post anytime.", body: ""},  
 ]; 
@@ -90,7 +80,6 @@ function randomPitch(arr) {
 let post_payment_pitch = randomPitch(post_payment_pitches);
 let thread_input_pitch = randomPitch(thread_input_pitches);
 let reply_input_pitch = randomPitch(reply_input_pitches);
-let sign_in_pitch = randomPitch(sign_in_pitches);
 let top_up_pitch = randomPitch(top_up_pitches);
 let approval_pitch = randomPitch(approval_pitches);
 
@@ -99,6 +88,7 @@ let is_seeing_cost = false;
 let is_paying = false;
 let is_trying = false;
 
+let auth_anon = null;
 let auth_none = null;
 let auth_icrc2 = null;
 
@@ -118,6 +108,8 @@ let is_deleting = false;
 let is_withdraw_open = false;
 let is_transferring = false;
 let is_revoke_open = false;
+let is_conecting_wallet = false;
+let is_anonymizing = false;
 
 let withdraw_receiver = "";
 let withdraw_tips = "";
@@ -155,6 +147,7 @@ BigInt.prototype.toJSON = function () {
 };
 
 function shortPrincipal(p, show_middle = false) {
+  if (p.isAnonymous()) return "Anonymous";
   let str = p.toText();
   let splitted = str.split('-');
   if (show_middle) {
@@ -201,6 +194,10 @@ function normalizeNumber(num) {
   return num.toString();
 }
 
+function isManagement(p) {
+  return p.compareTo(Principal.managementCanister()) == 'eq';
+}
+
 function isValidDestination(str) {
   const dest = str.trim().replace(' ', '');
   withdraw_receiver = dest;
@@ -213,7 +210,7 @@ function isValidDestination(str) {
       p = Principal.fromText(dest);
       if (p.isAnonymous()) {
         tips = 'Invalid Principal: Anonymous';
-      } else if (p.compareTo(Principal.managementCanister()) == 'eq') {
+      } else if (isManagement(p)) {
         tips = 'Invalid Principal: Management Canister';
       } else {
         a = AccountIdentifier.fromPrincipal({ principal: p }).toHex();
@@ -416,11 +413,12 @@ function timeUntil(futureDate) {
   const diffInYears = Math.floor(diffInMonths / 12);
   return rtf.format(diffInYears, 'year');
 }
-
+// todo: html textbox disable suggestions/history
 async function getAuthSchedule() {
-  if (auth_none == null || auth_icrc2 == null) {
+  if (auth_anon == null || auth_none == null || auth_icrc2 == null) {
     try {
       const auths = convertTyped({ Map : await dhisper_anon.kay4_authorizations() });
+      auth_anon = auths.Anonymous;
       auth_none = auths.None;
 
       const [token_canister_id] = auths.ICRC_2.keys();
@@ -429,7 +427,7 @@ async function getAuthSchedule() {
         canister_id: token_canister_id,
         ...fee_config, 
       };
-      console.log({ auth_none, auth_icrc2 });
+      console.log({ auth_anon, auth_none, auth_icrc2 });
     } catch (err) {
       // this.catchPopup("Error while Auth Schedule", err);
       console.error("Error while Getting Auth Schedule", err);
@@ -475,7 +473,6 @@ class App {
     this.isSliding = false;
     
     this.isSelectingWallet = false;
-    this.isConnectingWallet = false;
     this.isSelectingToken = false;
     this.isRequireApproval = false;
     this.isApproving = false;
@@ -603,6 +600,9 @@ class App {
       this.renderPosts();
       this.isSliding = true;
 
+      this.activeThread = { id: newIndex };
+      this.getComments();
+
       setTimeout(() => {
         this.currentIndex = newIndex;
         this.nextIndex = null;
@@ -724,145 +724,213 @@ class App {
     is_posting = true;
     this.renderPosts();
     if (caller_principal == null || caller_agent == null) {
-      return this.selectWallet(e);
-    }
-    const fee_create = is_comments_open ? {
-      minimum_amount: auth_icrc2.create.reply_minimum_amount,
-      character_limit: auth_icrc2.create.reply_character_limit,
-      additional_character_denominator: auth_icrc2.create.reply_additional_character_denominator,
-      additional_amount_numerator: auth_icrc2.create.reply_additional_amount_numerator,
-    } : { 
-      minimum_amount: auth_icrc2.create.thread_minimum_amount,
-      character_limit: auth_icrc2.create.thread_character_limit,
-      additional_character_denominator: auth_icrc2.create.thread_additional_character_denominator,
-      additional_amount_numerator: auth_icrc2.create.thread_additional_amount_numerator,
-    };
-    try {
-      await this.checkBalance();
-      base_cost = Number(fee_create.minimum_amount);
-      extra_chars = post_content.length > fee_create.character_limit? (post_content.length - Number(fee_create.character_limit)) : 0;
-      extra_cost = extra_chars > 0? extra_chars * Number(fee_create.additional_amount_numerator) / Number(fee_create.additional_character_denominator) : 0;
-  
-      post_cost = base_cost + token_fee + extra_cost;
-      token_approval_insufficient = token_approval.allowance < post_cost;
-      token_approval_expired = token_approval.expires_at.length > 0 && token_approval.expires_at[0] < (BigInt(Date.now()) * BigInt(1000000));
-      const require_approval = token_approval_insufficient || token_approval_expired;     
+      // todo: check cooldown/charlimit
       
-      const total_cost = require_approval? post_cost + token_fee : post_cost;
-      token_total = { amount: total_cost, msg: `Total posting fee: ${normalizeNumber(Number(total_cost) / token_power)} ${token_symbol}` };
-      token_details = [
-        { amount: base_cost, msg: `${is_comments_open? 'Replying' : 'New Thread'} fee: ${normalizeNumber(Number(base_cost) / token_power)} ${token_symbol}`, submsg: html`• <strong>Post instantly</strong> - skip cooldowns and competitions<br>• <strong>Say more</strong> - up to ${fee_create.character_limit} characters${is_comments_open
-            ? 'ICRC_2' in this.activeThread.auth? html`<br>• <strong>Boost attention</strong> - bump the thread to the top<br>• <strong>Stay visible</strong> - your reply can't be deleted by thread owner` : null
-          : html`<br>• <strong>Gain attention</strong> - paid replies bump your thread to the top<br>• <strong>Own the space</strong> - delete free replies in your thread`}` },
-        { amount: token_fee, msg: `Payment fee: ${normalizeNumber(Number(token_fee) / token_power)} ${token_symbol}`, submsg: `Covers the small cost of transferring your token`},
-        { amount: require_approval ? token_fee : BigInt(0), msg: `Payment Approval fee: ${normalizeNumber(Number(token_fee) / token_power)} ${token_symbol}`, submsg: `Allows Dhisper to deduct the posting fee automatically for you`},
-        { amount: extra_cost, msg: `Extra characters fee: ${normalizeNumber(Number(extra_cost) / token_power)} ${token_symbol}`, submsg: `You exceed ${fee_create.character_limit} character limit; either trim the extra ${extra_chars} characters, or pay for them` },
-      ];
-      if (!is_seeing_cost) {
-        is_seeing_cost = true;
-        return this.renderPosts();
-      }
-      if (is_paying) {
-        if (token_balance < total_cost) {
-          is_waiting_balance = true;
-          return this.renderPosts();
-        };
-        this.closeBalanceWaiter(e, true);
-  
-        if (require_approval) {
-          is_waiting_approval = true;
-          return this.renderPosts();
-        } else this.closePayment(e, true);
-      } else { // free
-        this.closePayment(e, true);
-      }
-      const dhisper_user = genDhisper(dhisper_id, { agent: caller_agent });
-      const create_post_res = await dhisper_user.kay4_create({
-        thread: this.activeThread ? [this.activeThread.id] : [],
-        content: post_content,
-        files: [],
-        owners: [],
-        metadata: [],
-        authorization: is_paying ? { ICRC_2: {
-          subaccount: [],
-          canister_id: auth_icrc2.canister_id,
-          fee: [BigInt(base_cost + extra_cost)]
-        } } : { None : { subaccount: [] } },
-      });
-      is_trying = false;
-      is_paying = false;
-      is_posting = false;
-      if ('Err' in create_post_res) {
-        if ('GenericError' in create_post_res.Err) {
-          this.showPopup('Creating Post Failed', create_post_res.Err.GenericError.message);
-        } else if ('ContentTooLarge' in create_post_res.Err) {
-          this.showPopup(`Post's Content Too Long`, html`Your post has ${create_post_res.Err.ContentTooLarge.current_size} characters, but the free limit is ${create_post_res.Err.ContentTooLarge.maximum_size}.<br><br>
-          <i><strong>Want more space?</strong> Post up to ${fee_create.character_limit} characters by paying a small fee (${normalizeNumber(Number(total_cost) / token_power)} ${token_symbol}).</i>`, 
-          // [{ 
-          //   label: 'Close', color: '', click: (e) => this.closePopup(e) 
-          // }, {
-          //   label: 'Pay', color: 'success', click: (e) => {
-          //     this.closePopup(e);
-          //     is_seeing_cost = true;
-          //     is_paying = true;
-          //     is_trying = false;
-          //     this.createNewPost(e);
-          //   }
-          // }]
-          );
-        } else if ('TemporarilyUnavailable' in create_post_res.Err) {
-          this.showPopup('Too Slow!', html`Somebody else just claimed the free slot. You can try again ${timeUntil(new Date(Number(create_post_res.Err.TemporarilyUnavailable.available_time) / 1000000))}.<br><br>
-          <i><strong>Skip the wait and competition</strong>. Post instantly by paying a small fee (${normalizeNumber(Number(total_cost) / token_power)} ${token_symbol}).</i>`);
-        } else this.errPopup("Create Post Error", create_post_res.Err);
-      } else {
-        this.closeCompose(e);
-        if (this.activeThread) {
-          this.getComments();
-        } else try {
-          const id = create_post_res.Ok;
-          let content = '';
-          let timestamp = '';
-          let owner = Principal.anonymous();
-          let auth = { None: { owner, subaccount: [] }};
-          await Promise.all([
-            new Promise((resolve) => {(async () => {
-              const contents = await dhisper_anon.kay4_contents_of([id]);
-              content = contents[0].length > 0? contents[0][0] : "";
-              resolve();
-            })()}),
-            new Promise((resolve) => {(async () => {
-              const auths = await dhisper_anon.kay4_authorizations_of([id]);
-              auth = auths[0].length > 0? auths[0][0] : auth;
-              resolve();
-            })()}),
-            new Promise((resolve) => {(async () => {
-              const timestamps = await dhisper_anon.kay4_timestamps_of([id]);
-              timestamp = timestamps[0].length > 0? new Date(Number(timestamps[0][0]) / 1000000) : null;
-              resolve();
-            })()}),
-            new Promise((resolve) => {(async () => {
-              const owners = await dhisper_anon.kay4_owners_of(id, [], [1]);
-              owner = owners.length > 0? owners[0].ICRC_1.owner : Principal.anonymous();
-              resolve();
-            })()}),
-          ]);
-          const new_post = { id, content, auth, timestamp, owner };
-          if (this.currentIndex == null) this.posts = [new_post]; else {
-            this.posts = [new_post, this.posts[this.currentIndex]];
-            this.currentIndex = 1;
-          };
-          this.startSlide(0, 'down');
-          this.posts = [new_post];
-          this.currentIndex = 0;
-        } catch (err) {
-          this.catchPopup("Error while Fetching Created Post", err);
+      
+      if (!is_anonymizing) return this.selectWallet(e);
+      this.closeLogin(e, false);
+      try {
+        const dhisper_anon = genDhisper(dhisper_id);
+        const create_post_res = await dhisper_anon.kay4_create({
+          thread: this.activeThread ? [this.activeThread.id] : [],
+          content: post_content,
+          files: [],
+          owners: [],
+          metadata: [],
+          authorization: { Anonymous: null },
+        });
+        is_posting = false;
+        if ('Err' in create_post_res) {
+          if ('GenericError' in create_post_res.Err) {
+            this.showPopup('Creating Post Failed', create_post_res.Err.GenericError.message);
+          } else if ('ContentTooLarge' in create_post_res.Err) {
+            this.showPopup(`Post's Content Too Long`, html`Your post has ${create_post_res.Err.ContentTooLarge.current_size} characters, but the anon limit is ${create_post_res.Err.ContentTooLarge.maximum_size}.<br><br>
+            <i><strong>Want more space?</strong> Post up to ${is_comments_open? auth_none.create.reply_character_limit : auth_none.create.thread_character_limit} characters by signing in.</i>`
+            );
+          } else if ('TemporarilyUnavailable' in create_post_res.Err) {
+            this.showPopup('Too Slow!', html`Somebody else just claimed the free slot. You can try again ${timeUntil(new Date(Number(create_post_res.Err.TemporarilyUnavailable.available_time) / 1000000))}.<br><br>
+            <i><strong>Post faster</strong> by signing in.</i>`);
+          } else this.errPopup("Create Post Error", create_post_res.Err);
+          if (is_comments_open) this.getComments(); else this.refresh(e, selected_sorting);
+        } else {
+          this.closeCompose(e);
+          if (this.activeThread) {
+            this.getComments();
+          } else try {
+            const id = create_post_res.Ok;
+            let content = '';
+            let timestamp = '';
+            let owner = Principal.managementCanister();
+            let auth = { None: { owner, subaccount: [] }};
+            await Promise.all([
+              new Promise((resolve) => {(async () => {
+                const contents = await dhisper_anon.kay4_contents_of([id]);
+                content = contents[0].length > 0? contents[0][0] : "";
+                resolve();
+              })()}),
+              new Promise((resolve) => {(async () => {
+                const auths = await dhisper_anon.kay4_authorizations_of([id]);
+                auth = auths[0].length > 0? auths[0][0] : auth;
+                resolve();
+              })()}),
+              new Promise((resolve) => {(async () => {
+                const timestamps = await dhisper_anon.kay4_timestamps_of([id]);
+                timestamp = timestamps[0].length > 0? new Date(Number(timestamps[0][0]) / 1000000) : null;
+                resolve();
+              })()}),
+              new Promise((resolve) => {(async () => {
+                const owners = await dhisper_anon.kay4_owners_of(id, [], [1]);
+                owner = owners.length > 0? owners[0].ICRC_1.owner : Principal.anonymous();
+                resolve();
+              })()}),
+            ]);
+            const new_post = { id, content, auth, timestamp, owner };
+            if (this.currentIndex == null) this.posts = [new_post]; else {
+              this.posts = [new_post, this.posts[this.currentIndex]];
+              this.currentIndex = 1;
+            };
+            this.startSlide(0, 'down');
+            this.posts = [new_post];
+            this.currentIndex = 0;
+          } catch (err) {
+            this.catchPopup("Error while Fetching Created Post", err);
+          }
+          post_content = '';
+          char_count = 0;
         }
-        post_content = '';
-        char_count = 0;
+      } catch (err) {
+        this.catchPopup("Error while Create Post", err);
+        if (is_anonymizing) {
+          is_anonymizing = false;
+        } else is_posting = false; 
       }
-    } catch (err) {
-      this.catchPopup("Error while Create Post", err);
-      if (is_posting) {
+    } else { // have login 
+      const fee_create = is_comments_open ? {
+        minimum_amount: auth_icrc2.create.reply_minimum_amount,
+        character_limit: auth_icrc2.create.reply_character_limit,
+        additional_character_denominator: auth_icrc2.create.reply_additional_character_denominator,
+        additional_amount_numerator: auth_icrc2.create.reply_additional_amount_numerator,
+      } : { 
+        minimum_amount: auth_icrc2.create.thread_minimum_amount,
+        character_limit: auth_icrc2.create.thread_character_limit,
+        additional_character_denominator: auth_icrc2.create.thread_additional_character_denominator,
+        additional_amount_numerator: auth_icrc2.create.thread_additional_amount_numerator,
+      };
+      try {
+        await this.checkBalance();
+        base_cost = Number(fee_create.minimum_amount);
+        extra_chars = post_content.length > fee_create.character_limit? (post_content.length - Number(fee_create.character_limit)) : 0;
+        extra_cost = extra_chars > 0? extra_chars * Number(fee_create.additional_amount_numerator) / Number(fee_create.additional_character_denominator) : 0;
+    
+        post_cost = base_cost + token_fee + extra_cost;
+        token_approval_insufficient = token_approval.allowance < post_cost;
+        token_approval_expired = token_approval.expires_at.length > 0 && token_approval.expires_at[0] < (BigInt(Date.now()) * BigInt(1000000));
+        const require_approval = token_approval_insufficient || token_approval_expired;     
+        
+        const total_cost = require_approval? post_cost + token_fee : post_cost;
+        token_total = { amount: total_cost, msg: `Total posting fee: ${normalizeNumber(Number(total_cost) / token_power)} ${token_symbol}` };
+        token_details = [
+          { amount: base_cost, msg: `${is_comments_open? 'Replying' : 'New Thread'} fee: ${normalizeNumber(Number(base_cost) / token_power)} ${token_symbol}`, submsg: html`• <strong>Post instantly</strong> - skip cooldowns and competitions<br>• <strong>Say more</strong> - up to ${fee_create.character_limit} characters${is_comments_open
+              ? 'ICRC_2' in this.activeThread.auth? html`<br>• <strong>Boost attention</strong> - bump the thread to the top<br>• <strong>Stay visible</strong> - your reply can't be deleted by thread owner` : null
+            : html`<br>• <strong>Gain attention</strong> - paid replies bump your thread to the top<br>• <strong>Own the space</strong> - delete anonymous replies & free replies in your thread you don't like`}` },
+          { amount: token_fee, msg: `Payment fee: ${normalizeNumber(Number(token_fee) / token_power)} ${token_symbol}`, submsg: `Covers the small cost of transferring your token`},
+          { amount: require_approval ? token_fee : BigInt(0), msg: `Payment Approval fee: ${normalizeNumber(Number(token_fee) / token_power)} ${token_symbol}`, submsg: `Allows Dhisper to deduct the posting fee automatically for you`},
+          { amount: extra_cost, msg: `Extra characters fee: ${normalizeNumber(Number(extra_cost) / token_power)} ${token_symbol}`, submsg: `You exceed ${fee_create.character_limit} character limit; either trim the extra ${extra_chars} characters, or pay for them` },
+        ];
+        if (!is_seeing_cost) {
+          is_seeing_cost = true;
+          return this.renderPosts();
+        }
+        if (is_paying) {
+          if (token_balance < total_cost) {
+            is_waiting_balance = true;
+            return this.renderPosts();
+          };
+          this.closeBalanceWaiter(e, true);
+    
+          if (require_approval) {
+            is_waiting_approval = true;
+            return this.renderPosts();
+          } else this.closePayment(e, true);
+        } else { // free
+          this.closePayment(e, true);
+        }
+        const dhisper_user = genDhisper(dhisper_id, { agent: caller_agent });
+        const create_post_res = await dhisper_user.kay4_create({
+          thread: this.activeThread ? [this.activeThread.id] : [],
+          content: post_content,
+          files: [],
+          owners: [],
+          metadata: [],
+          authorization: is_paying ? { ICRC_2: {
+            subaccount: [],
+            canister_id: auth_icrc2.canister_id,
+            fee: [BigInt(base_cost + extra_cost)]
+          } } : { None : { subaccount: [] } },
+        });
+        is_trying = false;
+        is_paying = false;
+        is_posting = false;
+        if ('Err' in create_post_res) {
+          if ('GenericError' in create_post_res.Err) {
+            this.showPopup('Creating Post Failed', create_post_res.Err.GenericError.message);
+          } else if ('ContentTooLarge' in create_post_res.Err) {
+            this.showPopup(`Post's Content Too Long`, html`Your post has ${create_post_res.Err.ContentTooLarge.current_size} characters, but the free limit is ${create_post_res.Err.ContentTooLarge.maximum_size}.<br><br>
+            <i><strong>Want more space?</strong> Post up to ${fee_create.character_limit} characters by paying a small fee (${normalizeNumber(Number(total_cost) / token_power)} ${token_symbol}).</i>`
+            );
+          } else if ('TemporarilyUnavailable' in create_post_res.Err) {
+            this.showPopup('Too Slow!', html`Somebody else just claimed the free slot. You can try again ${timeUntil(new Date(Number(create_post_res.Err.TemporarilyUnavailable.available_time) / 1000000))}.<br><br>
+            <i><strong>Skip the wait</strong>. Post instantly by paying a small fee (${normalizeNumber(Number(total_cost) / token_power)} ${token_symbol}).</i>`);
+          } else this.errPopup("Create Post Error", create_post_res.Err);
+          if (is_comments_open) this.getComments(); else this.refresh(e, selected_sorting);
+        } else {
+          this.closeCompose(e);
+          if (this.activeThread) {
+            this.getComments();
+          } else try {
+            const id = create_post_res.Ok;
+            let content = '';
+            let timestamp = '';
+            let owner = Principal.managementCanister();
+            let auth = { None: { owner, subaccount: [] }};
+            await Promise.all([
+              new Promise((resolve) => {(async () => {
+                const contents = await dhisper_anon.kay4_contents_of([id]);
+                content = contents[0].length > 0? contents[0][0] : "";
+                resolve();
+              })()}),
+              new Promise((resolve) => {(async () => {
+                const auths = await dhisper_anon.kay4_authorizations_of([id]);
+                auth = auths[0].length > 0? auths[0][0] : auth;
+                resolve();
+              })()}),
+              new Promise((resolve) => {(async () => {
+                const timestamps = await dhisper_anon.kay4_timestamps_of([id]);
+                timestamp = timestamps[0].length > 0? new Date(Number(timestamps[0][0]) / 1000000) : null;
+                resolve();
+              })()}),
+              new Promise((resolve) => {(async () => {
+                const owners = await dhisper_anon.kay4_owners_of(id, [], [1]);
+                owner = owners.length > 0? owners[0].ICRC_1.owner : Principal.anonymous();
+                resolve();
+              })()}),
+            ]);
+            const new_post = { id, content, auth, timestamp, owner };
+            if (this.currentIndex == null) this.posts = [new_post]; else {
+              this.posts = [new_post, this.posts[this.currentIndex]];
+              this.currentIndex = 1;
+            };
+            this.startSlide(0, 'down');
+            this.posts = [new_post];
+            this.currentIndex = 0;
+          } catch (err) {
+            this.catchPopup("Error while Fetching Created Post", err);
+          }
+          post_content = '';
+          char_count = 0;
+        }
+      } catch (err) {
+        this.catchPopup("Error while Create Post", err);
         if (is_checking_balance) {
           is_checking_balance = false;
         } else if (is_paying || is_trying) {
@@ -929,11 +997,11 @@ class App {
   }
 
   async setupIdentity() {
-    this.isConnectingWallet = true;
+    is_conecting_wallet = true;
     if (internet_identity == null) try {
       internet_identity = await AuthClient.create();
     } catch (err) {
-      this.isConnectingWallet = false;
+      is_conecting_wallet = false;
       return console.error("BG Error while Creating Auth Client", err);
     };
     try {
@@ -943,12 +1011,12 @@ class App {
     } catch (err) {
       console.error("BG Error while Checking Identity Delegation", err);
     };
-    this.isConnectingWallet = false;
+    is_conecting_wallet = false;
   }
 
   async logoutInternetIdentity(e) {
     e.preventDefault();
-    this.isConnectingWallet = true;
+    is_conecting_wallet = true;
     this.renderPosts();
     try {
       await internet_identity.logout();
@@ -963,18 +1031,18 @@ class App {
     } catch (err) {
       this.catchPopup("Error while Signing Out", err);
     }
-    this.isConnectingWallet = false;
+    is_conecting_wallet = false;
     this.renderPosts();
   }
 
   async loginInternetIdentity(e) {
     e.preventDefault();
-    this.isConnectingWallet = true;
+    is_conecting_wallet = true;
     this.renderPosts();
     if (internet_identity == null) try {
       internet_identity = await AuthClient.create();
     } catch (err) {
-      this.isConnectingWallet = false;
+      is_conecting_wallet = false;
       this.catchPopup("Error while Creating Auth Client", err);
       return this.renderPosts();
     };
@@ -988,7 +1056,7 @@ class App {
         onSuccess: async () => await this.handleAuthenticated(e),
       });
     } catch (err) {
-      this.isConnectingWallet = false;
+      is_conecting_wallet = false;
       this.catchPopup("Error while Checking Identity Delegation", err);
       this.renderPosts();
     };
@@ -1072,7 +1140,8 @@ class App {
     e.preventDefault();
     closeDrawer('wallet', () => {
       this.isSelectingWallet = false; 
-      this.isConnectingWallet = false;
+      is_conecting_wallet = false;
+      is_anonymizing = false;
       if (reset) {
         is_posting = false;
       };
@@ -1156,7 +1225,7 @@ class App {
           this.getComments();
         }
         this.interestingReply.content = "";
-        this.interestingReply.owner = Principal.anonymous();
+        this.interestingReply.owner = Principal.managementCanister();
       }
     } catch (err) {
       is_deleting = false;
@@ -1190,7 +1259,7 @@ class App {
       panel.classList.add('slide-out-left');
       setTimeout(() => {
         is_start_open = false;
-        this.isConnectingWallet = false;
+        is_conecting_wallet = false;
         this.renderPosts();
       }, 400); // matches slideOut animation duration
     }
@@ -1198,10 +1267,10 @@ class App {
 
   async checkBalance() {
     const token_anon = genToken(auth_icrc2.canister_id);
-    const token_fee_promise = token_anon.icrc1_fee();
-    const token_name_promise = token_anon.icrc1_name();
-    const token_symbol_promise = token_anon.icrc1_symbol();
-    const token_decimals_promise = token_anon.icrc1_decimals();
+    const token_fee_promise = token_fee > 0? null : token_anon.icrc1_fee();
+    const token_name_promise = token_name.length > 0? null : token_anon.icrc1_name();
+    const token_symbol_promise = token_symbol.length > 0? null : token_anon.icrc1_symbol();
+    const token_decimals_promise = token_power > 0? null :token_anon.icrc1_decimals();
     
     const token_balance_promise = token_anon.icrc1_balance_of({ owner : caller_principal, subaccount : [] });
     const token_approval_promise = token_anon.icrc2_allowance({
@@ -1211,10 +1280,10 @@ class App {
     is_checking_balance = true;
     this.renderPosts();
     try {
-      token_fee = Number(await token_fee_promise);
-      token_name = await token_name_promise;
-      token_symbol = await token_symbol_promise;
-      token_power = 10 ** Number(await token_decimals_promise);
+      if (token_fee_promise) token_fee = Number(await token_fee_promise);
+      if (token_name_promise) token_name = await token_name_promise;
+      if (token_symbol_promise) token_symbol = await token_symbol_promise;
+      if (token_decimals_promise) token_power = 10 ** Number(await token_decimals_promise);
       token_balance = Number(await token_balance_promise);
       token_approval = await token_approval_promise;
     } catch (err) {
@@ -1353,7 +1422,7 @@ class App {
       const currentPost = this.posts[this.currentIndex];
       current_post = html`<div class="post-content-wrapper">
         <div class="text">${currentPost?.content ?? ''}</div>
-        <div class="subtext">${currentPost?.owner? currentPost.owner.isAnonymous()? 'DELETED' : shortPrincipal(currentPost.owner) : ''}<br>${currentPost ? timeAgo(currentPost.timestamp) : ''}</div>
+        <div class="subtext">${currentPost?.owner? isManagement(currentPost.owner)? 'DELETED' : shortPrincipal(currentPost.owner) : ''}<br>${currentPost ? timeAgo(currentPost.timestamp) : ''}</div>
       </div>`;
     }
     let next_post;
@@ -1362,7 +1431,7 @@ class App {
       // console.log({ nextPost });
       next_post = nextPost ? html`<div class="post-content-wrapper">
         <div class="text">${nextPost.content}</div>
-        <div class="subtext">${nextPost.owner.isAnonymous()? 'DELETED' : shortPrincipal(nextPost.owner)}<br>${timeAgo(nextPost.timestamp)}</div>
+        <div class="subtext">${isManagement(nextPost.owner)? 'DELETED' : shortPrincipal(nextPost.owner)}<br>${timeAgo(nextPost.timestamp)}</div>
       </div>` : null;
     }
     
@@ -1375,7 +1444,7 @@ class App {
           <div class="panel-scroll">
             <div class="comment-grid">
               <div class="comment">
-                <div class="meta">#${this.activeThread.id} • ${this.activeThread.owner .isAnonymous()? 'DELETED' : shortPrincipal(this.activeThread.owner)}${this.activeThread.timestamp ? ' • ' + timeAgo(this.activeThread.timestamp) : ''}${'ICRC_2' in this.activeThread.auth? ' • PAID' : ''}</div>
+                <div class="meta">#${this.activeThread.id} • ${isManagement(this.activeThread.owner)? 'DELETED' : shortPrincipal(this.activeThread.owner)}${this.activeThread.timestamp ? ' • ' + timeAgo(this.activeThread.timestamp) : ''}${'ICRC_2' in this.activeThread.auth? ' • PAID' : ''}</div>
                 <div class="content">${this.activeThread.content}</div>
               </div>
               <button class="action-btn" @click=${(e) => this.openReply(e, this.activeThread)}>⋮</button>
@@ -1383,7 +1452,7 @@ class App {
             ${this.threadComments.map(comment => html`
               <div class="comment-grid">
                 <div class="comment">
-                  <div class="meta">#${comment.id} • ${comment.owner.isAnonymous()? ('ICRC_2' in this.activeThread.auth && 'None' in comment.auth && this.activeThread.owner.toText() == comment.auth.None.owner.toText()? 'REMOVED by T.O.' : 'DELETED') : shortPrincipal(comment.owner)}${comment.timestamp ? ` • ${timeAgo(comment.timestamp)}` : ''}${'ICRC_2' in comment.auth? ' • PAID' : ''}</div>
+                  <div class="meta">#${comment.id} • ${isManagement(comment.owner)? ('ICRC_2' in this.activeThread.auth && 'None' in comment.auth && this.activeThread.owner.toText() == comment.auth.None.owner.toText()? 'REMOVED by T.O.' : 'DELETED') : shortPrincipal(comment.owner)}${comment.timestamp ? ` • ${timeAgo(comment.timestamp)}` : ''}${'ICRC_2' in comment.auth? ' • PAID' : ''}</div>
                   <div class="content">${comment.content}</div>
                 </div>
                 <button class="action-btn" @click=${(e) => this.openReply(e, comment)}>⋮</button>
@@ -1402,9 +1471,9 @@ class App {
     <div class="panel comment-actions slide-in-left">
       <div class="panel-scroll">
         <p>
-          ${this.interestingReply.owner.isAnonymous()? '' : html`<strong>${this.interestingReply.content}</strong><br><br>`}
+          ${isManagement(this.interestingReply.owner)? '' : html`<strong>${this.interestingReply.content}</strong><br><br>`}
           <small>
-            ${this.interestingReply.owner.isAnonymous()? html`<strong>DELETED</strong>` : html`<i>by, ${this.interestingReply.owner.toText()}</i>`}<br><br>
+            ${isManagement(this.interestingReply.owner)? html`<strong>DELETED</strong>` : html`<i>by, ${this.interestingReply.owner.isAnonymous()? 'Anonymous' : this.interestingReply.owner.toText()}</i>`}<br><br>
             at, ${this.interestingReply.timestamp.toLocaleString()}
           </small>
         </p>
@@ -1414,16 +1483,24 @@ class App {
         ${caller_principal && caller_principal.toText() != this.interestingReply.owner.toText()? 
         html`<button class="action-btn success" ?disabled=${true}>Tip</button>` : null}
         ${caller_principal
-            ? caller_principal.toText() == this.interestingReply.owner.toText()
-              ? this.interestingReply.id == this.activeThread.id && 'ICRC_2' in this.activeThread.auth
-                ? this.deletePostBtn('own paid thread') 
+            ? caller_principal.toText() == this.interestingReply.owner.toText() // is reply owner
+              ? this.interestingReply.id == this.activeThread.id // is thread owner 
+                ? 'ICRC_2' in this.activeThread.auth
+                  ? this.deletePostBtn('own paid thread')
+                  : 'None' in this.activeThread.auth
+                    ? this.deletePostBtn('own free thread')
+                    : null // anon thread owner cant delete
                 : this.deletePostBtn('own post')
-              : this.interestingReply.owner.isAnonymous()
+              : isManagement(this.interestingReply.owner)
                 ? null // deleted post
-                : caller_principal.toText() == this.activeThread.owner.toText() && 'ICRC_2' in this.activeThread.auth && 'None' in this.interestingReply.auth
-                  ? this.deletePostBtn('other free post') 
-                  : null // free thread owner cannot delete other post
-            : null // not logged in
+                : caller_principal.toText() == this.activeThread.owner.toText()
+                  ? 'ICRC_2' in this.activeThread.auth && ('None' in this.interestingReply.auth || 'Anonymous' in this.interestingReply.auth)
+                    ? this.deletePostBtn('other free post') 
+                    : null // paid thread owner cant delete paid replies
+                  : 'None' in this.activeThread.auth && 'Anonymous' in this.interestingReply.auth
+                    ? this.deletePostBtn('other anon post')
+                    : null // free thread owner cant delete free/paid replies
+            : null // not logged in, cant delete anything
         }
       </div>
     </div>
@@ -1432,11 +1509,11 @@ class App {
     <div class="panel start slide-in-right">
       <div class="panel-scroll">
         <p>
-          <small>Welcome, <strong>${caller_principal? caller_principal.toText() : `Guest`}</strong></small><br><br>
+          <small>Welcome, <strong>${caller_principal? caller_principal.toText() : `Anonymous`}</strong></small><br><br>
           <strong>Balance:</strong> ${caller_principal
             ? html`<small>${!is_checking_balance || token_power > 0? normalizeNumber(token_balance / token_power) : html`<span class="spinner"></span>`} ${token_symbol}</small> 
           &nbsp<button class="action-btn compact" ?disabled=${!(token_fee > 0 && token_balance > token_fee)} @click=${(e) => this.openWithdraw(e)}>Withdraw</button>` 
-            : html`<button class="action-btn success compact" ?disabled=${this.isConnectingWallet} @click=${(e) => this.loginInternetIdentity(e)}>${this.isConnectingWallet
+            : html`<button class="action-btn success compact" ?disabled=${is_conecting_wallet} @click=${(e) => this.loginInternetIdentity(e)}>${is_conecting_wallet
           ? html`<span class="spinner"></span> Connecting...`
           : html`Sign in to see this`}</button>`} <br><br>
           <strong>Approval:</strong> ${caller_principal
@@ -1445,7 +1522,7 @@ class App {
           ${token_approval?.allowance > 0? 
             html`<small><small><i>${token_approval.expires_at.length > 0? `Expires ${timeUntil(new Date(Number(token_approval.expires_at[0]) / 1000000))}` : 'No expiry'}</i></small></small>` : ''
           }`
-            : html`<button class="action-btn success compact" ?disabled=${this.isConnectingWallet} @click=${(e) => this.loginInternetIdentity(e)}>${this.isConnectingWallet
+            : html`<button class="action-btn success compact" ?disabled=${is_conecting_wallet} @click=${(e) => this.loginInternetIdentity(e)}>${is_conecting_wallet
           ? html`<span class="spinner"></span> Connecting...`
           : html`Sign in to see this`}</button>`}<br><br>
           <strong>Sort Threads by:</strong><br>
@@ -1454,7 +1531,7 @@ class App {
         </p>
       </div>
       <div class="action-bar sticky">
-        ${caller_principal? html`<button class="action-btn failed" ?disabled=${this.isConnectingWallet} @click=${(e) => this.logoutInternetIdentity(e)}>Sign Out</button>` : html`<button class="action-btn success" ?disabled=${this.isConnectingWallet} @click=${(e) => this.loginInternetIdentity(e)}>${this.isConnectingWallet
+        ${caller_principal? html`<button class="action-btn failed" ?disabled=${is_conecting_wallet} @click=${(e) => this.logoutInternetIdentity(e)}>Sign Out</button>` : html`<button class="action-btn success" ?disabled=${is_conecting_wallet} @click=${(e) => this.loginInternetIdentity(e)}>${is_conecting_wallet
             ? html`<span class="spinner"></span> Connecting...`
             : html`Sign in via Internet ID`}</button>`}
         <button class="action-btn" @click=${(e) => this.closeStart(e)}>Close</button>
@@ -1479,7 +1556,6 @@ class App {
           <button class="action-btn" ?disabled=${is_posting} @click=${(e) => this.closeCompose(e)}>Close</button>
           <button id="post_btn" class="action-btn success" ?disabled=${is_posting || post_content.trim().length == 0} @click=${(e) => {
             post_payment_pitch = randomPitch(post_payment_pitches);
-            sign_in_pitch = randomPitch(sign_in_pitches);
             top_up_pitch = randomPitch(top_up_pitches);
             approval_pitch = randomPitch(approval_pitches);
             this.createNewPost(e);
@@ -1549,16 +1625,32 @@ class App {
       </div>
     </div>` : null;
 
+    const free_char_limit = auth_none? is_comments_open? auth_none.create.reply_character_limit : auth_none.create.thread_character_limit : 0;
+    const free_cooldown = auth_none? is_comments_open? auth_none.create.reply_cooldown : auth_none.create.thread_cooldown : 0;
+    const anon_char_limit = auth_anon? is_comments_open? auth_anon.create.reply_character_limit : auth_anon.create.thread_character_limit : 0;
+    const anon_cooldown = auth_anon? is_comments_open? auth_anon.create.reply_cooldown : auth_anon.create.thread_cooldown : 0;
     const wallet_selectors = this.isSelectingWallet
       ? html`<div class="backdraw wallet fade-in" @click=${(e) => this.closeLogin(e)}></div>
       <div class="drawer wallet slide-in-up">
         <p>
-          <strong>${sign_in_pitch.header}</strong><br>
-          <small><small>${sign_in_pitch.body}</small></small>
+          <strong>Sign In to Do More</strong><br>
+          <small><small>
+          • delete your post later<br>
+          • write up to ${free_char_limit} characters per post<br>
+          ${is_comments_open? 'None' in this.activeThread.auth? html`• protect your reply from being deleted by the thread owner<br>` : '' : html`• delete anonymous replies you don't like in your thread<br>` }
+          <br>
+          <i>${post_content.length > anon_char_limit? html`To ${is_comments_open? "reply" : "make a new thread"} anonymously, trim your post to <strong>${anon_char_limit} characters</strong> or less` : `... or stay anonymous`}
+          </i></small></small>
         </p>
         <div class="action-bar">
-          <button class="action-btn" @click=${(e) => this.closeLogin(e)}>Close</button>
-          <button class="action-btn success" ?disabled=${this.isConnectingWallet} @click=${(e) => this.loginInternetIdentity(e)}>${this.isConnectingWallet
+          <button class="action-btn" @click=${(e) => this.closeLogin(e)}>Back</button>
+          <button class="action-btn" ?disabled=${is_conecting_wallet || is_anonymizing || post_content.length > anon_char_limit} @click=${(e) => {
+            is_anonymizing = true;
+            this.createNewPost(e);
+          }}>${is_anonymizing
+            ? html`<span class="spinner"></span> Trying...`
+            : html`Stay Anonymous`}</button>
+          <button class="action-btn success" ?disabled=${is_conecting_wallet || is_anonymizing} @click=${(e) => this.loginInternetIdentity(e)}>${is_conecting_wallet
             ? html`<span class="spinner"></span> Connecting...`
             : html`Sign in via Internet ID`}</button>
         </div>
@@ -1575,14 +1667,14 @@ class App {
   //   <div class="drawer token slide-in-up">
   //     <div>Select the token of your post</div>
       
-  //     <button class="send-btn" ?disabled=${this.isConnectingWallet} @click=${(e) => this.loginInternetIdentity(e)}>
-  //         ${this.isConnectingWallet
+  //     <button class="send-btn" ?disabled=${is_conecting_wallet} @click=${(e) => this.loginInternetIdentity(e)}>
+  //         ${is_conecting_wallet
   //           ? html`<span class="spinner"></span> Sending...`
   //           : html`Pay & Send`}
   //       </button>
   //   </div>
   // `;
-    const free_char_limit = auth_none? is_comments_open? auth_none.create.reply_character_limit : auth_none.create.thread_character_limit : 0;
+    
     const cost_and_reasons = is_seeing_cost
       ? html`<div class="backdraw cost fade-in" @click=${(e) => this.closePayment(e)}></div>
       <div class="drawer cost slide-in-up">
@@ -1590,10 +1682,10 @@ class App {
           <strong>${token_total.msg}</strong>&nbsp
           <button class="action-btn compact" @click=${(e) => this.viewTokenDetails(e)}>Show fee details</button>
           <br><br>
-          <small>${post_payment_pitch}${post_content.length > free_char_limit? html`<small><br><br><i>To ${is_comments_open? "reply" : "make a new thread"} for free, trim your post to <strong>${free_char_limit} characters</strong> or less.</i></small>` : null}</small>
+          <small>${post_payment_pitch}${post_content.length > free_char_limit? html`<small><br><br><i>To ${is_comments_open? "reply" : "make a new thread"} for free, trim your post to <strong>${free_char_limit} characters</strong> or less</i></small>` : null}</small>
         </p>
         <div class="action-bar">
-          <button class="action-btn" ?disabled=${is_paying || is_trying} @click=${(e) => this.closePayment(e)}>Close</button>
+          <button class="action-btn" ?disabled=${is_paying || is_trying} @click=${(e) => this.closePayment(e)}>Back</button>
           <button class="action-btn" ?disabled=${is_paying || is_trying || post_content.length > free_char_limit} @click=${(e) => {
             is_trying = true;
             is_paying = false;
@@ -1621,7 +1713,7 @@ class App {
       })} = <strong>${token_total.msg}</strong>
       </p>
       <div class="action-bar">
-        <button class="action-btn" @click=${(e) => this.closeCostDetails(e)}>Close</button>
+        <button class="action-btn" @click=${(e) => this.closeCostDetails(e)}>Back</button>
       </div>
     </div>
     ` : null;
@@ -1689,7 +1781,7 @@ class App {
         <br><small><small>After you've topped up, let us know.</small></small>
       </p>
       <div class="action-bar">
-        <button class="action-btn" ?disabled=${is_checking_balance} @click=${(e) => this.closeBalanceWaiter(e)}>Close</button>
+        <button class="action-btn" ?disabled=${is_checking_balance} @click=${(e) => this.closeBalanceWaiter(e)}>Back</button>
         <button class="action-btn success" ?disabled=${is_checking_balance} @click=${(e) => this.createNewPost(e)}>
           ${is_checking_balance
             ? html`<span class="spinner"></span> Checking...`
@@ -1742,7 +1834,7 @@ class App {
         </div>
         <br>
         <div class="action-bar">
-          <button class="action-btn" ?disabled=${is_approving} @click=${(e) => this.closeApprovalWaiter(e)}>Close</button>
+          <button class="action-btn" ?disabled=${is_approving} @click=${(e) => this.closeApprovalWaiter(e)}>Back</button>
           <button class="action-btn success" ?disabled=${is_approving} @click=${(e) => this.approveToken(e)}>
             ${is_approving
               ? html`<span class="spinner"></span> Approving...`
