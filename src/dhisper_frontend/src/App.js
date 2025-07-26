@@ -16,12 +16,11 @@ let caller_account_copied = false;
 let caller_account_copy_failed = false;
 
 /*
-todo: check all todos before deployingpp
+todo: check all todos before deploying
 
 todo: inset glow (green success, red fail, blue ongoing)
 todo: add cooldown timer
 todo: url pathways
-todo: label "REMOVED by MOD"
 todo: dont show deleted thread
 todo: start 2x3 keypad, each button will open their own pane (balance, approval, etc.) 
 todo: put thread details in comment panel
@@ -34,7 +33,6 @@ todo: tipping button, tipping form, tipped view
 todo: report button, report form, reported view
 todo: appeal button, appeal form, appealed view
 todo: combine post+pay popup?
-todo: load comments on slide
 todo: fix normal button's gloss
 todo: fix radio button disabled css
 todo: sunglasses (dark mode)
@@ -44,23 +42,23 @@ todo: snap scroll
 */
 
 const post_payment_pitches = [
-  html`Value your words.`,
-  html`Reach everyone. No followers needed.`,
-  html`Claim your space.`,
-  html`Cut the noise. Keep the signal.`,
-  html`Leave your mark.`,
+  html`Value your words`,
+  html`Reach everyone. No followers needed`,
+  html`Claim your space`,
+  html`Cut the noise. Keep the signal`,
+  html`Leave your mark`,
 ];
 
 const thread_input_pitches = [
-  { header: "", body: "If it matters, put it in writing.", placeholder: "Drop something they'll remember." },
-  { header: "", body: "Say something worth reading.", placeholder: "Got some words that'll stop the scroll?" },
-  { header: "", body: "Broadcast to everyone.", placeholder: "What should they read about?" },
+  { header: "", body: "If it matters, put it in writing", placeholder: "Drop something they'll remember" },
+  { header: "", body: "Say something worth reading", placeholder: "Got some words that'll stop the scroll?" },
+  { header: "", body: "Broadcast to everyone", placeholder: "What should they read about?" },
 ];
 
 const reply_input_pitches = [
-  { header: "", body: "Revive the thread.", placeholder: "What do you have to say?" },
-  { header: "", body: "Push the thread further.", placeholder: "Keep it going..." },
-  { header: "", body: "Keep the chain alive.", placeholder: "Make the thread longer..." },
+  { header: "", body: "Revive the thread", placeholder: "What do you have to say?" },
+  { header: "", body: "Push the thread further", placeholder: "Keep it going..." },
+  { header: "", body: "Keep the chain alive", placeholder: "Make the thread longer..." },
 ];
 
 const top_up_pitches = [
@@ -91,6 +89,7 @@ let is_trying = false;
 let auth_anon = null;
 let auth_none = null;
 let auth_icrc2 = null;
+let mod_p = null;
 
 let selected_sorting = 'new';
 let is_start_open = false;
@@ -413,7 +412,17 @@ function timeUntil(futureDate) {
   const diffInYears = Math.floor(diffInMonths / 12);
   return rtf.format(diffInYears, 'year');
 }
-// todo: html textbox disable suggestions/history
+
+async function getMods() {
+  if (mod_p != null) return;
+  try {
+    let mods = await dhisper_anon.kay4_moderators();
+    if (mods.length > 0) mod_p = mods[0];
+  } catch (err) {
+    console.error('BG Error while getting Mods');
+  }
+}
+
 async function getAuthSchedule() {
   if (auth_anon == null || auth_none == null || auth_icrc2 == null) {
     try {
@@ -484,6 +493,7 @@ class App {
     this.threadComments = [];
     this.commentInput = "";
 
+    getMods();
     getAuthSchedule();
     this.setupScroll();
     this.setupIdentity();
@@ -525,13 +535,13 @@ class App {
         })()}),
         new Promise((resolve) => {(async () => {
           const auths = await dhisper_anon.kay4_authorizations_of(post_ids);
-          for (const i in auths) posts[i]['auth'] = auths[i].length > 0? auths[i][0] : { None: { owner : Principal.anonymous(), subaccount: [] }};
+          for (const i in auths) posts[i]['auth'] = auths[i].length > 0? auths[i][0] : { None: { owner : Principal.managementCanister(), subaccount: [] }};
           resolve();
         })()}),
         ...post_ids.map((post_id, i) => {
           return new Promise((resolve) => {(async () => {
             const owners = await dhisper_anon.kay4_owners_of(post_id, [], [1]);
-            posts[i]['owner'] = owners.length > 0? owners[0].ICRC_1.owner : Principal.anonymous();
+            posts[i]['owner'] = owners.length > 0? owners[0].ICRC_1.owner : Principal.managementCanister();
             resolve();
           })()})
         }),
@@ -600,9 +610,6 @@ class App {
       this.renderPosts();
       this.isSliding = true;
 
-      this.activeThread = { id: newIndex };
-      this.getComments();
-
       setTimeout(() => {
         this.currentIndex = newIndex;
         this.nextIndex = null;
@@ -647,8 +654,9 @@ class App {
     e.preventDefault();
     is_comments_open = true;
     this.activeThread = this.posts[
-      this.nextIndex == null? 
-      this.currentIndex : this.nextIndex];
+      this.nextIndex == null
+        ? this.currentIndex 
+        : this.nextIndex];
     
     if (this.activeThread) {
       this.renderPosts();
@@ -691,7 +699,7 @@ class App {
           new Promise((resolve) => {(async () => {
             const auths = await dhisper_anon.kay4_authorizations_of(reply_ids);
             for (const i in auths) {
-              replies[auth_count + +i]['auth'] = auths[i].length > 0? auths[i][0] : { None: { owner : Principal.anonymous(), subaccount: [] }};
+              replies[auth_count + +i]['auth'] = auths[i].length > 0? auths[i][0] : { None: { owner : Principal.managementCanister(), subaccount: [] }};
             };
             auth_count += auths.length;
             resolve();
@@ -699,7 +707,7 @@ class App {
           ...reply_ids.map((reply_id, i) => {
             return new Promise((resolve) => {(async () => {
               const owners = await dhisper_anon.kay4_owners_of(reply_id, [], [1]);
-              replies[owner_count + +i]['owner'] = owners.length > 0? owners[0].ICRC_1.owner : Principal.anonymous();
+              replies[owner_count + +i]['owner'] = owners.length > 0? owners[0].ICRC_1.owner : Principal.managementCanister();
               resolve();
             })()})
           })
@@ -724,15 +732,13 @@ class App {
     is_posting = true;
     this.renderPosts();
     if (caller_principal == null || caller_agent == null) {
-      // todo: check cooldown/charlimit
-      
-      
+
       if (!is_anonymizing) return this.selectWallet(e);
       this.closeLogin(e, false);
       try {
         const dhisper_anon = genDhisper(dhisper_id);
         const create_post_res = await dhisper_anon.kay4_create({
-          thread: this.activeThread ? [this.activeThread.id] : [],
+          thread: is_comments_open ? [this.activeThread.id] : [],
           content: post_content,
           files: [],
           owners: [],
@@ -754,7 +760,7 @@ class App {
           if (is_comments_open) this.getComments(); else this.refresh(e, selected_sorting);
         } else {
           this.closeCompose(e);
-          if (this.activeThread) {
+          if (is_comments_open) {
             this.getComments();
           } else try {
             const id = create_post_res.Ok;
@@ -780,7 +786,7 @@ class App {
               })()}),
               new Promise((resolve) => {(async () => {
                 const owners = await dhisper_anon.kay4_owners_of(id, [], [1]);
-                owner = owners.length > 0? owners[0].ICRC_1.owner : Principal.anonymous();
+                owner = owners.length > 0? owners[0].ICRC_1.owner : Principal.managementCanister();
                 resolve();
               })()}),
             ]);
@@ -818,6 +824,7 @@ class App {
       };
       try {
         await this.checkBalance();
+        if (token_fee == 0 || token_power == 0 || token_symbol == "" || token_name == "" || token_approval == null) return this.createNewPost(e);
         base_cost = Number(fee_create.minimum_amount);
         extra_chars = post_content.length > fee_create.character_limit? (post_content.length - Number(fee_create.character_limit)) : 0;
         extra_cost = extra_chars > 0? extra_chars * Number(fee_create.additional_amount_numerator) / Number(fee_create.additional_character_denominator) : 0;
@@ -857,7 +864,7 @@ class App {
         }
         const dhisper_user = genDhisper(dhisper_id, { agent: caller_agent });
         const create_post_res = await dhisper_user.kay4_create({
-          thread: this.activeThread ? [this.activeThread.id] : [],
+          thread: is_comments_open ? [this.activeThread.id] : [],
           content: post_content,
           files: [],
           owners: [],
@@ -885,7 +892,7 @@ class App {
           if (is_comments_open) this.getComments(); else this.refresh(e, selected_sorting);
         } else {
           this.closeCompose(e);
-          if (this.activeThread) {
+          if (is_comments_open) {
             this.getComments();
           } else try {
             const id = create_post_res.Ok;
@@ -911,7 +918,7 @@ class App {
               })()}),
               new Promise((resolve) => {(async () => {
                 const owners = await dhisper_anon.kay4_owners_of(id, [], [1]);
-                owner = owners.length > 0? owners[0].ICRC_1.owner : Principal.anonymous();
+                owner = owners.length > 0? owners[0].ICRC_1.owner : Principal.managementCanister();
                 resolve();
               })()}),
             ]);
@@ -1079,7 +1086,7 @@ class App {
     }
     if (e != null) {
       this.closeLogin(e, !is_posting);
-    } else this.closeLogin(e);
+    };
   }
 
   async approveToken(e) {
@@ -1221,11 +1228,40 @@ class App {
       } else {
         // this.showPopup("Delete Successful", "");
         this.closeDeleteConfirm(e);
-        if (this.activeThread) {
+        if (is_comments_open) {
           this.getComments();
         }
-        this.interestingReply.content = "";
-        this.interestingReply.owner = Principal.managementCanister();
+        const id = this.interestingReply.id;
+        let content = '';
+        let timestamp = '';
+        let owner = Principal.managementCanister();
+        let auth = { None: { owner, subaccount: [] }};
+        await Promise.all([
+          new Promise((resolve) => {(async () => {
+            const contents = await dhisper_anon.kay4_contents_of([id]);
+            content = contents[0].length > 0? contents[0][0] : "";
+            resolve();
+          })()}),
+          new Promise((resolve) => {(async () => {
+            const auths = await dhisper_anon.kay4_authorizations_of([id]);
+            auth = auths[0].length > 0? auths[0][0] : auth;
+            resolve();
+          })()}),
+          new Promise((resolve) => {(async () => {
+            const timestamps = await dhisper_anon.kay4_timestamps_of([id]);
+            timestamp = timestamps[0].length > 0? new Date(Number(timestamps[0][0]) / 1000000) : null;
+            resolve();
+          })()}),
+          new Promise((resolve) => {(async () => {
+            const owners = await dhisper_anon.kay4_owners_of(id, [], [1]);
+            owner = owners.length > 0? owners[0].ICRC_1.owner : Principal.managementCanister();
+            resolve();
+          })()}),
+        ]);
+        this.interestingReply.content = content;
+        this.interestingReply.timestamp = timestamp;
+        this.interestingReply.owner = owner;
+        this.interestingReply.auth = auth;
       }
     } catch (err) {
       is_deleting = false;
@@ -1266,6 +1302,7 @@ class App {
   }
 
   async checkBalance() {
+    if (auth_icrc2 == null) await getAuthSchedule();
     const token_anon = genToken(auth_icrc2.canister_id);
     const token_fee_promise = token_fee > 0? null : token_anon.icrc1_fee();
     const token_name_promise = token_name.length > 0? null : token_anon.icrc1_name();
@@ -1279,14 +1316,37 @@ class App {
     });
     is_checking_balance = true;
     this.renderPosts();
+    
+    if (token_fee_promise) try {
+      token_fee = Number(await token_fee_promise);
+    } catch (err) {
+      token_fee = 0;
+      console.error("Error while getting token fee", err);
+    }
+    if (token_name_promise) try {
+      token_name = await token_name_promise;
+    } catch (err) {
+      token_name = "";
+      console.error("Error while getting token name", err);
+    }
+    if (token_symbol_promise) try {
+      token_symbol = await token_symbol_promise;
+    } catch (err) {
+      token_symbol = "";
+      console.error("Error while getting token symbol", err);
+    }
+    if (token_decimals_promise) try {
+      token_power = 10 ** Number(await token_decimals_promise);
+    } catch (err) {
+      token_power = 0;
+      console.error("Error while getting token decimals", err);
+    } 
     try {
-      if (token_fee_promise) token_fee = Number(await token_fee_promise);
-      if (token_name_promise) token_name = await token_name_promise;
-      if (token_symbol_promise) token_symbol = await token_symbol_promise;
-      if (token_decimals_promise) token_power = 10 ** Number(await token_decimals_promise);
       token_balance = Number(await token_balance_promise);
       token_approval = await token_approval_promise;
     } catch (err) {
+      token_balance = 0;
+      token_approval = null;
       this.catchPopup("Error while Checking Balance", err);
     }
     console.log({ token_balance, token_power, token_approval });
@@ -1444,7 +1504,13 @@ class App {
           <div class="panel-scroll">
             <div class="comment-grid">
               <div class="comment">
-                <div class="meta">#${this.activeThread.id} • ${isManagement(this.activeThread.owner)? 'DELETED' : shortPrincipal(this.activeThread.owner)}${this.activeThread.timestamp ? ' • ' + timeAgo(this.activeThread.timestamp) : ''}${'ICRC_2' in this.activeThread.auth? ' • PAID' : ''}</div>
+                <div class="meta">#${this.activeThread.id} • ${isManagement(this.activeThread.owner) && 'None' in this.activeThread.auth
+                  ? mod_p != null && mod_p.toText() == this.activeThread.auth.None.owner.toText()
+                    ? 'DELETED by Mod'
+                    : this.activeThread.owner.toText() == this.activeThread.auth.None.owner.toText()
+                      ? 'DELETED by T.O.'
+                      : 'DELETED' 
+                  : shortPrincipal(this.activeThread.owner)}${this.activeThread.timestamp ? ' • ' + timeAgo(this.activeThread.timestamp) : ''}${'ICRC_2' in this.activeThread.auth? ' • PAID' : ''}</div>
                 <div class="content">${this.activeThread.content}</div>
               </div>
               <button class="action-btn" @click=${(e) => this.openReply(e, this.activeThread)}>⋮</button>
@@ -1452,7 +1518,13 @@ class App {
             ${this.threadComments.map(comment => html`
               <div class="comment-grid">
                 <div class="comment">
-                  <div class="meta">#${comment.id} • ${isManagement(comment.owner)? ('ICRC_2' in this.activeThread.auth && 'None' in comment.auth && this.activeThread.owner.toText() == comment.auth.None.owner.toText()? 'REMOVED by T.O.' : 'DELETED') : shortPrincipal(comment.owner)}${comment.timestamp ? ` • ${timeAgo(comment.timestamp)}` : ''}${'ICRC_2' in comment.auth? ' • PAID' : ''}</div>
+                  <div class="meta">#${comment.id} • ${isManagement(comment.owner) && 'None' in comment.auth
+                    ? mod_p != null && mod_p.toText() == comment.auth.None.owner.toText()
+                      ? 'DELETED by Mod'
+                      : this.activeThread.owner.toText() == comment.auth.None.owner.toText()
+                        ? 'DELETED by T.O.'
+                        : 'DELETED' 
+                    : shortPrincipal(comment.owner)}${comment.timestamp ? ` • ${timeAgo(comment.timestamp)}` : ''}${'ICRC_2' in comment.auth? ' • PAID' : ''}</div>
                   <div class="content">${comment.content}</div>
                 </div>
                 <button class="action-btn" @click=${(e) => this.openReply(e, comment)}>⋮</button>
@@ -1480,8 +1552,14 @@ class App {
       </div>
       <div class="action-bar sticky">
         <button class="action-btn" @click=${(e) => this.closeReply(e)}>Close</button>
-        ${caller_principal && caller_principal.toText() != this.interestingReply.owner.toText()? 
-        html`<button class="action-btn success" ?disabled=${true}>Tip</button>` : null}
+        ${caller_principal
+          ? isManagement(this.interestingReply.owner) || this.interestingReply.content.length == 0
+            ? null // deleted
+            : caller_principal.toText() != this.interestingReply.owner.toText() && !('Anonymous' in this.interestingReply.auth)
+              ? html`<button class="action-btn success" ?disabled=${true}>Tip</button>` 
+              : null // owns the post or post is anon
+          : null // not logged in
+        }
         ${caller_principal
             ? caller_principal.toText() == this.interestingReply.owner.toText() // is reply owner
               ? this.interestingReply.id == this.activeThread.id // is thread owner 
@@ -1493,13 +1571,16 @@ class App {
                 : this.deletePostBtn('own post')
               : isManagement(this.interestingReply.owner)
                 ? null // deleted post
-                : caller_principal.toText() == this.activeThread.owner.toText()
-                  ? 'ICRC_2' in this.activeThread.auth && ('None' in this.interestingReply.auth || 'Anonymous' in this.interestingReply.auth)
-                    ? this.deletePostBtn('other free post') 
+                : mod_p != null && caller_principal.toText() == mod_p.toText() 
+                  ? this.deletePostBtn('mod')
+                  : caller_principal.toText() == this.activeThread.owner.toText() // is thread owner
+                    ? 'ICRC_2' in this.activeThread.auth && ('None' in this.interestingReply.auth || 'Anonymous' in this.interestingReply.auth)
+                      ? this.deletePostBtn('other free post') 
+                      : 'None' in this.activeThread.auth && 'Anonymous' in this.interestingReply.auth
+                        ? this.deletePostBtn('other anon post')
+                        : null // free thread owner cant delete paid/free replies
                     : null // paid thread owner cant delete paid replies
-                  : 'None' in this.activeThread.auth && 'Anonymous' in this.interestingReply.auth
-                    ? this.deletePostBtn('other anon post')
-                    : null // free thread owner cant delete free/paid replies
+                    
             : null // not logged in, cant delete anything
         }
       </div>
@@ -1517,7 +1598,7 @@ class App {
           ? html`<span class="spinner"></span> Connecting...`
           : html`Sign in to see this`}</button>`} <br><br>
           <strong>Approval:</strong> ${caller_principal
-            ? html`<small>${!is_checking_balance || (token_approval && token_power > 0)? normalizeNumber(Number(token_approval.allowance) / token_power) : html`<span class="spinner"></span>`} ${token_symbol}</small> 
+            ? html`<small>${!is_checking_balance || token_power > 0? normalizeNumber(Number(token_approval? token_approval.allowance : 0) / token_power) : html`<span class="spinner"></span>`} ${token_symbol}</small> 
           &nbsp<button class="action-btn compact" ?disabled=${!(token_fee > 0 && token_balance > token_fee && token_approval.allowance > 0)} @click=${(e) => this.openRevoke(e)}>Revoke</button><br>
           ${token_approval?.allowance > 0? 
             html`<small><small><i>${token_approval.expires_at.length > 0? `Expires ${timeUntil(new Date(Number(token_approval.expires_at[0]) / 1000000))}` : 'No expiry'}</i></small></small>` : ''
@@ -1549,7 +1630,7 @@ class App {
           }</strong><br>
           <small><small>${is_comments_open? reply_input_pitch.body : thread_input_pitch.body}</small></small>
           <br><br>
-          <input id="post_input" type="text" ?disabled=${is_posting} placeholder="${is_comments_open? reply_input_pitch.placeholder : thread_input_pitch.placeholder}" @input=${(e) => this.updateCharCount(e)} .value=${post_content || ''}/>
+          <input id="post_input" type="text" autocomplete="off" ?disabled=${is_posting} placeholder="${is_comments_open? reply_input_pitch.placeholder : thread_input_pitch.placeholder}" @input=${(e) => this.updateCharCount(e)} .value=${post_content || ''}/>
           <small><small>${char_count}</small></small>
         </p>
         <div class="action-bar">
@@ -1570,13 +1651,31 @@ class App {
     </div>
     <div class="drawer delete-confirm slide-in-up">
       <p>
-        <strong>Confirm Delete ${delete_type == 'own post' ? 'Post' : delete_type == 'own paid thread'? 'Paid Thread Post' : 'Free Reply'}?</strong><br>
-        <small>
-          ${delete_type == 'other free post'
-            ? "As the owner of this paid thread, you can delete this free reply permanently. Please do so only if it is off-topic, spam or violates the law."
-            : `This will permanently delete your post${delete_type == 'own paid thread' ? ', revoke your ability to delete free replies in this thread, and prevent the thread from being bumped to the top by paid replies' : ''}. This action cannot be undone. Do you want to continue?`
-          }
-        </small>
+        <strong>Confirm Delete ${delete_type == 'mod'
+          ? 'This Bad Post'
+          : delete_type == 'own paid thread' 
+            ? 'Your Paid Thread' 
+            : delete_type == 'own free thread' 
+              ? 'Your Thread'
+              : delete_type == 'other free post'
+                ? 'This Free Reply'
+                : delete_type == 'other anon post'
+                  ? 'This Anon Reply'
+                  : 'Your Post'}?</strong><br>
+        <small><small>
+        ${delete_type == 'mod'
+          ? 'Hi moderator'
+          : delete_type == 'own paid thread'
+            ? 'This will delete your paid thread. You will no longer be able to delete free replies inside it, and paid replies will no longer bump it to the top'
+            : delete_type == 'own free thread'
+              ? 'This will delete your thread. You will no longer be able to delete anonymous replies inside it'
+              : delete_type == 'other free post'
+                ? 'This will delete this free reply. Only do this if it is off-topic, spam, harmful, or violates the law'
+                : delete_type == 'other anon post'
+                  ? 'This will delete this anonymous reply. Only do this if it is off-topic, spam, harmful, or violates the law'
+                  : 'This will delete your post'
+        }. This action cannot be undone. Do you want to continue?
+        </small></small>
       </p>
       <div class="action-bar">
         <button class="action-btn success" ?disabled=${is_deleting} @click=${(e) => this.closeDeleteConfirm(e)}>No</button>
@@ -1596,7 +1695,7 @@ class App {
               - Withdrawal fee: ${normalizeNumber(token_fee / token_power)} ${token_symbol}<br>
               = Receiver gets: <strong>${normalizeNumber((token_balance - token_fee) / token_power)} ${token_symbol}</strong>
             </small></small><br><br>
-            <input id="withdraw_input" type="text" ?disabled=${is_posting} placeholder="Receiver's Principal or Account ID" @input=${(e) => {
+            <input id="withdraw_input" type="text" autocomplete="off" ?disabled=${is_posting} placeholder="Receiver's Principal or Account ID" @input=${(e) => {
               withdraw_receiver = e.target.value;
               this.renderPosts();
             }} .value=${withdraw_receiver || ''}/>

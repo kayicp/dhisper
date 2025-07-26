@@ -5,7 +5,6 @@ import Value "../Value";
 import Text "mo:base/Text";
 import Nat64 "mo:base/Nat64";
 import Blob "mo:base/Blob";
-import Buffer "mo:base/Buffer";
 import Nat "mo:base/Nat";
 import RBTree "../StableCollections/RedBlackTree/RBTree";
 import Batcher "../Batcher";

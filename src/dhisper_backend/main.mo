@@ -105,26 +105,7 @@ shared (install) actor class Canister(
     ("thread_cooldown", #Nat(15))]))])),
   ]);
   metadata := Value.insert(metadata, Kay4.AUTHORIZATIONS, auth_val);
-
-  // migrate
-  // for ((p_id, p1) in RBTree.entries(posts)) {
-  //   // post1 to post2
-  //   let p2 : Kay4.Post2 = { p1 with tips = RBTree.empty(); report = null };
-  //   posts2 := RBTree.insert(posts2, Nat.compare, p_id, p2);
-
-  //   // register each post id to owners
-  //   // for ((_, p1_owners) in RBTree.entries(p1.owners_versions)) {
-  //   //   for ((owner, _) in RBTree.entries(p1_owners)) {
-  //   //     var owner_posts = switch (RBTree.get(owners, Kay2.compareIdentity, owner)) {
-  //   //       case (?found) found;
-  //   //       case _ RBTree.empty();
-  //   //     };
-  //   //     owner_posts := RBTree.insert(owner_posts, Nat.compare, p_id, ());
-  //   //     owners := RBTree.insert(owners, Kay2.compareIdentity, owner, owner_posts);
-  //   //   };
-  //   // };
-  // };
-  // posts := RBTree.empty();
+  metadata := Value.setArray(metadata, Kay4.MODERATORS, [#Principal(Principal.fromText("zdufx-vd6h4-p3y77-5nrcs-hlohr-fbhbj-25clt-7ymsa-glmbm-kbc7r-kae"))]);
 
   func log(t : Text) = logs := Kay1.log(logs, t);
   public shared query func kay1_logs() : async [Text] = async Queue.arrayTail(logs);
@@ -212,6 +193,7 @@ shared (install) actor class Canister(
   public shared query func kay4_max_replies_size() : async ?Nat = async Value.metaNat(metadata, Kay4.MAX_REPLIES);
 
   // public shared query func kay4_fee_collectors() : async [Principal] = async RBTree.arrayKey(Value.getUniquePrincipals(metadata, Kay4.FEE_COLLECTORS, RBTree.empty()));
+  public shared query func kay4_moderators() : async [Principal] = async RBTree.arrayKey(Value.getUniquePrincipals(metadata, Kay4.MODERATORS, RBTree.empty()));
   public shared query func kay4_authorizations() : async [(Text, Value.Type)] = async RBTree.array(Value.getMap(metadata, Kay4.AUTHORIZATIONS, RBTree.empty()));
 
   public shared query func kay4_default_take_value() : async ?Nat = async Value.metaNat(metadata, Kay4.DEFAULT_TAKE);
