@@ -806,6 +806,13 @@ input[type=text]:focus {
   padding: 10px;
 }
 
+.action-btn.compact img {
+  height: 1.25rem; /* scales image to match text height */
+  width: auto;
+  vertical-align: middle; /* or baseline, depending on alignment needs */
+  filter: drop-shadow(0 0 5px rgb(0,0,0));
+}
+
 *,
 *::before,
 *::after {

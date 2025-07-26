@@ -1608,7 +1608,11 @@ class App {
           : html`Sign in to see this`}</button>`}<br><br>
           <strong>Sort Threads by:</strong><br>
           <button class="action-btn ${selected_sorting == 'new'? 'success' : ''} compact" @click=${(e) => this.refresh(e, 'new')}>Recently Created</button>&nbsp
-          <button class="action-btn ${selected_sorting == 'new'? '' : 'success'} compact" @click=${(e) => this.refresh(e, 'hot')}>Recently Bumped</button>
+          <button class="action-btn ${selected_sorting == 'new'? '' : 'success'} compact" @click=${(e) => this.refresh(e, 'hot')}>Recently Bumped</button><br><br>
+          <strong>Follow me on:</strong>&nbsp<button class="action-btn compact" @click=${(e) => {
+            e.preventDefault();
+            window.open('https://x.com/kayicp', '_blank');
+          }}>Twitter&nbsp<img src="twitter.png" alt="Twitter Logo"/></button>
         </p>
       </div>
       <div class="action-bar sticky">
